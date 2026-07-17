@@ -18,6 +18,7 @@ class SystemSetup {
         'FileID', 'CustomerID', 'BookingID', 'FileType', 'FileName', 'DriveFileID', 'UploadDate'
       ],
       LOGS: AppLogger.HEADERS
+      ,USERS: AuthService.HEADERS
     };
   }
 

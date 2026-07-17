@@ -289,15 +289,15 @@ class BookingService {
 
 /* Apps Script entry points for google.script.run and manual administration. */
 function initializeBookingModule() { return BookingService.initialize(); }
-function getBookings(options) { return Utils.toClient(BookingService.list(options)); }
-function getBooking(bookingId) { return Utils.toClient(BookingService.get(bookingId)); }
-function getTodayBookings() { return Utils.toClient(BookingService.today()); }
-function getBookingOptions() { return Utils.toClient(BookingService.options()); }
-function getBookingAvailability(input) { return Utils.toClient(BookingService.availability(input)); }
-function createBooking(data) { return Utils.toClient(BookingService.create(data)); }
-function updateBooking(bookingId, changes) { return Utils.toClient(BookingService.update(bookingId, changes)); }
-function confirmBooking(bookingId) { return Utils.toClient(BookingService.confirm(bookingId)); }
-function checkInBooking(bookingId) { return Utils.toClient(BookingService.checkIn(bookingId)); }
-function completeBooking(bookingId) { return Utils.toClient(BookingService.complete(bookingId)); }
-function cancelBooking(bookingId, note) { return Utils.toClient(BookingService.cancel(bookingId, note)); }
-function markBookingNoShow(bookingId, note) { return Utils.toClient(BookingService.markNoShow(bookingId, note)); }
+function getBookings(token, options) { AuthService.requireSession(token); return Utils.toClient(BookingService.list(options)); }
+function getBooking(token, bookingId) { AuthService.requireSession(token); return Utils.toClient(BookingService.get(bookingId)); }
+function getTodayBookings(token) { AuthService.requireSession(token); return Utils.toClient(BookingService.today()); }
+function getBookingOptions(token) { AuthService.requireSession(token); return Utils.toClient(BookingService.options()); }
+function getBookingAvailability(token, input) { AuthService.requireSession(token); return Utils.toClient(BookingService.availability(input)); }
+function createBooking(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.create(data)); }
+function updateBooking(token, bookingId, changes) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.update(bookingId, changes)); }
+function confirmBooking(token, bookingId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.confirm(bookingId)); }
+function checkInBooking(token, bookingId) { AuthService.requireSession(token); return Utils.toClient(BookingService.checkIn(bookingId)); }
+function completeBooking(token, bookingId) { AuthService.requireSession(token); return Utils.toClient(BookingService.complete(bookingId)); }
+function cancelBooking(token, bookingId, note) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.cancel(bookingId, note)); }
+function markBookingNoShow(token, bookingId, note) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.markNoShow(bookingId, note)); }

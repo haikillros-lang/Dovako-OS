@@ -48,4 +48,4 @@ class ReportService {
   }
 }
 
-function getReport(range) { return Utils.toClient(ReportService.get(range)); }
+function getReport(token, range) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(ReportService.get(range)); }

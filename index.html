@@ -6,15 +6,16 @@
     <?!= include('style'); ?>
   </head>
   <body>
-    <div class="app-shell">
+    <?!= include('login'); ?>
+    <div id="appShell" class="app-shell hidden">
       <aside class="sidebar">
         <div class="brand"><span class="brand-mark">D</span><span>DOVAKO OS</span></div>
         <nav class="nav-menu" aria-label="Điều hướng chính">
-          <button class="nav-item active" data-view="dashboard" onclick="app.navigate('dashboard')">Tổng quan</button>
-          <button class="nav-item" data-view="customers" onclick="app.navigate('customers')">Khách hàng</button>
-          <button class="nav-item" data-view="bookings" onclick="app.navigate('bookings')">Booking</button>
-          <button class="nav-item" data-view="reports" onclick="app.navigate('reports')">Báo cáo</button>
-          <button class="nav-item" data-view="settings" onclick="app.navigate('settings')">Cài đặt</button>
+          <button class="nav-item active" data-view="dashboard" data-roles="Admin,Manager,Reception,Technician" onclick="app.navigate('dashboard')">Tổng quan</button>
+          <button class="nav-item" data-view="customers" data-roles="Admin,Manager,Reception,Technician" onclick="app.navigate('customers')">Khách hàng</button>
+          <button class="nav-item" data-view="bookings" data-roles="Admin,Manager,Reception,Technician" onclick="app.navigate('bookings')">Booking</button>
+          <button class="nav-item" data-view="reports" data-roles="Admin,Manager" onclick="app.navigate('reports')">Báo cáo</button>
+          <button class="nav-item" data-view="settings" data-roles="Admin,Manager" onclick="app.navigate('settings')">Cài đặt</button>
         </nav>
         <div class="sidebar-foot">DOVAKO Stretching<br>v1.0</div>
       </aside>
@@ -25,7 +26,7 @@
             <p class="eyebrow" id="pageEyebrow">Vận hành hằng ngày</p>
             <h1 id="pageTitle">Tổng quan</h1>
           </div>
-          <div id="todayLabel" class="today-label"></div>
+          <div class="header-tools"><div id="todayLabel" class="today-label"></div><div class="user-tools"><span id="currentUserLabel"></span><button class="text-button" type="button" onclick="authUi.changePassword()">Đổi mật khẩu</button><button class="text-button" type="button" onclick="authUi.logout()">Đăng xuất</button></div></div>
         </header>
 
         <section id="view-dashboard" class="view active-view">
@@ -67,6 +68,12 @@
           reports: ['Báo cáo', 'Doanh thu theo ngày, dịch vụ và nhân viên'],
           settings: ['Cài đặt', 'Danh mục nhân viên và dịch vụ']
         },
+        applyPermissions(role) {
+          document.querySelectorAll('[data-roles]').forEach(function (element) {
+            const roles = String(element.dataset.roles || '').split(',');
+            element.classList.toggle('hidden', roles.indexOf(role) === -1);
+          });
+        },
         navigate(viewName) {
           document.querySelectorAll('.view').forEach(function (view) {
             view.classList.toggle('active-view', view.id === 'view-' + viewName);
@@ -84,10 +91,7 @@
         },
         loadDashboard() {
           document.getElementById('dashboardCards').innerHTML = '<div class="loading-card">Đang tải tổng quan...</div>';
-          google.script.run
-            .withSuccessHandler(this.renderDashboard.bind(this))
-            .withFailureHandler(this.handleError.bind(this))
-            .getDashboard();
+          apiCall('getDashboard', [], this.renderDashboard.bind(this), this.handleError.bind(this));
         },
         renderDashboard(data) {
           const revenue = data.revenue || {};
@@ -131,11 +135,12 @@
         }
       };
       document.getElementById('todayLabel').textContent = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
-      document.addEventListener('DOMContentLoaded', function () { app.loadDashboard(); });
+      document.addEventListener('DOMContentLoaded', function () { authUi.bootstrap(); });
     </script>
     <?!= include('customer_script'); ?>
     <?!= include('booking_script'); ?>
     <?!= include('report_script'); ?>
     <?!= include('settings_script'); ?>
+    <?!= include('auth_script'); ?>
   </body>
 </html>

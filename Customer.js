@@ -176,10 +176,10 @@ class CustomerService {
 
 /* Apps Script entry points for google.script.run and manual administration. */
 function initializeCustomerModule() { return CustomerService.initialize(); }
-function getCustomers(options) { return Utils.toClient(CustomerService.list(options)); }
-function getCustomer(customerId) { return Utils.toClient(CustomerService.get(customerId)); }
-function searchCustomers(query, options) { return Utils.toClient(CustomerService.search(query, options)); }
-function createCustomer(data) { return Utils.toClient(CustomerService.create(data)); }
-function updateCustomer(customerId, changes) { return Utils.toClient(CustomerService.update(customerId, changes)); }
-function archiveCustomer(customerId) { return Utils.toClient(CustomerService.archive(customerId)); }
-function restoreCustomer(customerId) { return Utils.toClient(CustomerService.restore(customerId)); }
+function getCustomers(token, options) { AuthService.requireSession(token); return Utils.toClient(CustomerService.list(options)); }
+function getCustomer(token, customerId) { AuthService.requireSession(token); return Utils.toClient(CustomerService.get(customerId)); }
+function searchCustomers(token, query, options) { AuthService.requireSession(token); return Utils.toClient(CustomerService.search(query, options)); }
+function createCustomer(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(CustomerService.create(data)); }
+function updateCustomer(token, customerId, changes) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(CustomerService.update(customerId, changes)); }
+function archiveCustomer(token, customerId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(CustomerService.archive(customerId)); }
+function restoreCustomer(token, customerId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CustomerService.restore(customerId)); }

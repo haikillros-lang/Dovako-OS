@@ -78,9 +78,9 @@ class CatalogService {
   }
 }
 
-function getEmployees(includeInactive) { return Utils.toClient(CatalogService.employees(includeInactive)); }
-function getServices(includeInactive) { return Utils.toClient(CatalogService.services(includeInactive)); }
-function createEmployee(data) { return Utils.toClient(CatalogService.createEmployee(data)); }
-function createService(data) { return Utils.toClient(CatalogService.createService(data)); }
-function archiveEmployee(employeeId) { return Utils.toClient(CatalogService.archiveEmployee(employeeId)); }
-function archiveService(serviceId) { return Utils.toClient(CatalogService.archiveService(serviceId)); }
+function getEmployees(token, includeInactive) { AuthService.requireSession(token); return Utils.toClient(CatalogService.employees(includeInactive)); }
+function getServices(token, includeInactive) { AuthService.requireSession(token); return Utils.toClient(CatalogService.services(includeInactive)); }
+function createEmployee(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.createEmployee(data)); }
+function createService(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.createService(data)); }
+function archiveEmployee(token, employeeId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.archiveEmployee(employeeId)); }
+function archiveService(token, serviceId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.archiveService(serviceId)); }

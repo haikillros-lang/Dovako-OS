@@ -2,12 +2,12 @@
   const bookingUi = { options: { customers: [], employees: [], services: [], beds: [] }, availability: null, timer: null };
 
   function loadBookingScreen() {
-    google.script.run.withSuccessHandler(function (options) {
+    apiCall('getBookingOptions', [], function (options) {
       bookingUi.options = options || bookingUi.options;
       renderBookingOptions();
       loadBookings();
       loadBookingAvailability();
-    }).withFailureHandler(handleBookingError).getBookingOptions();
+    }, handleBookingError);
   }
 
   function renderBookingOptions() {
@@ -37,8 +37,7 @@
   function loadBookings() {
     const date = document.getElementById('bookingFilterDate').value;
     document.getElementById('bookingList').innerHTML = '<div class="empty-state">Đang tải...</div>';
-    google.script.run.withSuccessHandler(renderBookings).withFailureHandler(handleBookingError)
-      .getBookings({ date: date, includeCancelled: true });
+    apiCall('getBookings', [{ date: date, includeCancelled: true }], renderBookings, handleBookingError);
   }
 
   function selectedServiceDuration() {
@@ -59,10 +58,10 @@
     const date = document.getElementById('bookingDate').value;
     if (!date) return;
     document.getElementById('bookingAvailability').innerHTML = '<div class="empty-state">Đang tính lịch trống...</div>';
-    google.script.run.withSuccessHandler(renderBookingAvailability).withFailureHandler(function (error) {
+    apiCall('getBookingAvailability', [{ date: date, duration: bookingDuration() }], renderBookingAvailability, function (error) {
       document.getElementById('bookingAvailability').innerHTML = '<div class="empty-state">Không tải được lịch trống.</div>';
       handleBookingError(error);
-    }).getBookingAvailability({ date: date, duration: bookingDuration() });
+    });
   }
 
   function renderBookingAvailability(data) {
@@ -126,8 +125,7 @@
     const call = action === 'confirm' ? 'confirmBooking' : action === 'checkin' ? 'checkInBooking' : action === 'complete' ? 'completeBooking' : 'cancelBooking';
     const note = action === 'cancel' ? window.prompt('Lý do hủy lịch (không bắt buộc):') : null;
     if (action === 'cancel' && note === null) return;
-    google.script.run.withSuccessHandler(function () { app.toast('Đã cập nhật trạng thái booking.'); loadBookings(); loadBookingAvailability(); app.loadDashboard(); })
-      .withFailureHandler(handleBookingError)[call](id, note);
+    apiCall(call, action === 'cancel' ? [id, note] : [id], function () { app.toast('Đã cập nhật trạng thái booking.'); loadBookings(); loadBookingAvailability(); app.loadDashboard(); }, handleBookingError);
   }
 
   function handleBookingError(error) { app.toast(error && error.message ? error.message : 'Không thể xử lý booking.', 'error'); }
@@ -160,9 +158,9 @@
       event.preventDefault();
       const data = Object.fromEntries(new FormData(event.currentTarget).entries());
       const button = document.getElementById('saveBookingButton'); button.disabled = true;
-      google.script.run.withSuccessHandler(function () {
+      apiCall('createBooking', [data], function () {
         app.toast('Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; bookingRecalculate(); loadBookings(); loadBookingAvailability(); app.loadDashboard(); button.disabled = false;
-      }).withFailureHandler(function (error) { button.disabled = false; handleBookingError(error); }).createBooking(data);
+      }, function (error) { button.disabled = false; handleBookingError(error); });
     });
     document.getElementById('bookingService').addEventListener('change', bookingUseService);
     document.getElementById('bookingPrice').addEventListener('input', bookingRecalculate);

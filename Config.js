@@ -66,6 +66,8 @@ const CONFIG = Object.freeze({
 
     LOGS: "LOGS"
 
+    ,USERS: "USERS"
+
   },
 
   //==========================
@@ -117,6 +119,12 @@ const CONFIG = Object.freeze({
     RECEPTION: "Reception",
 
     TECHNICIAN: "Technician"
+
+  },
+
+  AUTH: {
+
+    SESSION_TTL_SECONDS: 21600
 
   },
 

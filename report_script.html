@@ -9,7 +9,7 @@
     const to = document.getElementById('reportTo');
     if (!from.value || !to.value) { const now = new Date(); from.value = reportDateValue(new Date(now.getFullYear(), now.getMonth(), 1)); to.value = reportDateValue(now); }
     document.getElementById('reportSummary').innerHTML = '<div class="loading-card">Đang tải báo cáo...</div>';
-    google.script.run.withSuccessHandler(renderReport).withFailureHandler(function (error) { app.toast(error && error.message ? error.message : 'Không thể tải báo cáo.', 'error'); }).getReport({ From: from.value, To: to.value });
+    apiCall('getReport', [{ From: from.value, To: to.value }], renderReport, function (error) { app.toast(error && error.message ? error.message : 'Không thể tải báo cáo.', 'error'); });
   }
   function renderReport(report) {
     const summary = report.summary || {};

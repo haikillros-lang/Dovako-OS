@@ -1,0 +1,37 @@
+<script>
+  const authUi = {
+    token: localStorage.getItem('dovako.session.token') || '', user: null,
+    bootstrap: function () {
+      if (this.token) { google.script.run.withSuccessHandler(this.restore.bind(this)).withFailureHandler(this.showLogin.bind(this)).getCurrentUser(this.token); return; }
+      this.showLogin();
+    },
+    restore: function (session) { if (session && session.UserID) { this.accept(session); } else { this.clear(); this.showLogin(); } },
+    showLogin: function () {
+      document.getElementById('appShell').classList.add('hidden'); document.getElementById('loginScreen').classList.remove('hidden');
+      google.script.run.withSuccessHandler(function (status) { document.getElementById('loginPanel').classList.toggle('hidden', status.setupRequired); document.getElementById('bootstrapPanel').classList.toggle('hidden', !status.setupRequired); }).withFailureHandler(function () { authUi.message('Không thể kiểm tra tài khoản. Vui lòng thử lại.', true); }).getAuthBootstrapStatus();
+    },
+    accept: function (session) {
+      this.token = session.token || this.token; this.user = session; localStorage.setItem('dovako.session.token', this.token);
+      document.getElementById('loginScreen').classList.add('hidden'); document.getElementById('appShell').classList.remove('hidden');
+      document.getElementById('currentUserLabel').textContent = session.FullName + ' · ' + session.Role;
+      document.body.className = document.body.className.replace(/role-[a-z]+/g, '').trim() + ' role-' + String(session.Role).toLowerCase();
+      app.applyPermissions(session.Role); app.navigate('dashboard');
+    },
+    clear: function () { localStorage.removeItem('dovako.session.token'); this.token = ''; this.user = null; },
+    logout: function () { const token = this.token; this.clear(); if (token) google.script.run.logoutUser(token); this.showLogin(); },
+    message: function (text, isError) { const node = document.getElementById('authMessage'); node.textContent = text || ''; node.className = 'auth-message' + (isError ? ' error' : ''); },
+    changePassword: function () { const current = prompt('Nhập mật khẩu hiện tại:'); if (current === null) return; const next = prompt('Nhập mật khẩu mới (ít nhất 8 ký tự):'); if (next === null) return; apiCall('changeMyPassword', [current, next], function () { app.toast('Đã đổi mật khẩu.'); }, function (error) { app.toast(error.message || 'Không thể đổi mật khẩu.', 'error'); }); }
+  };
+  function apiCall(method, args, success, failure) {
+    if (!authUi.token) { authUi.showLogin(); return; }
+    google.script.run.withSuccessHandler(success).withFailureHandler(function (error) {
+      const message = error && error.message ? error.message : 'Không thể xử lý yêu cầu.';
+      if (message.indexOf('Phiên đăng nhập') !== -1) { authUi.clear(); authUi.message(message, true); authUi.showLogin(); return; }
+      if (failure) failure(error); else app.toast(message, 'error');
+    })[method](authUi.token, ...(args || []));
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('loginForm').addEventListener('submit', function (event) { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget).entries()); authUi.message(''); google.script.run.withSuccessHandler(authUi.accept.bind(authUi)).withFailureHandler(function (error) { authUi.message(error.message || 'Không thể đăng nhập.', true); }).loginUser(data.Username, data.Password); });
+    document.getElementById('bootstrapForm').addEventListener('submit', function (event) { event.preventDefault(); const data = Object.fromEntries(new FormData(event.currentTarget).entries()); if (data.Password !== data.ConfirmPassword) { authUi.message('Mật khẩu xác nhận chưa khớp.', true); return; } authUi.message(''); google.script.run.withSuccessHandler(function () { google.script.run.withSuccessHandler(authUi.accept.bind(authUi)).withFailureHandler(function (error) { authUi.message(error.message || 'Không thể đăng nhập.', true); }).loginUser(data.Username, data.Password); }).withFailureHandler(function (error) { authUi.message(error.message || 'Không thể tạo tài khoản.', true); }).bootstrapAdmin(data); });
+  });
+</script>

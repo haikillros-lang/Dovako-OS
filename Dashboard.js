@@ -124,6 +124,6 @@ class DashboardService {
 }
 
 /* Apps Script entry points for google.script.run. */
-function getDashboard(referenceDate) { return Utils.toClient(DashboardService.getDashboard(referenceDate)); }
-function getTodaySchedule(referenceDate) { return Utils.toClient(DashboardService.getTodaySchedule(referenceDate)); }
-function getRevenueSummary(referenceDate) { return Utils.toClient(DashboardService.getRevenueSummary(referenceDate)); }
+function getDashboard(token, referenceDate) { AuthService.requireSession(token); return Utils.toClient(DashboardService.getDashboard(referenceDate)); }
+function getTodaySchedule(token, referenceDate) { AuthService.requireSession(token); return Utils.toClient(DashboardService.getTodaySchedule(referenceDate)); }
+function getRevenueSummary(token, referenceDate) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(DashboardService.getRevenueSummary(referenceDate)); }

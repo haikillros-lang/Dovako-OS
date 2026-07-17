@@ -62,5 +62,5 @@ class DriveService {
   }
 }
 
-function getCustomerFiles(customerId) { return Utils.toClient(DriveService.list(customerId)); }
-function uploadCustomerFile(data) { return Utils.toClient(DriveService.upload(data)); }
+function getCustomerFiles(token, customerId) { AuthService.requireSession(token); return Utils.toClient(DriveService.list(customerId)); }
+function uploadCustomerFile(token, data) { AuthService.requireSession(token); return Utils.toClient(DriveService.upload(data)); }

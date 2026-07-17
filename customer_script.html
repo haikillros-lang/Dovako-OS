@@ -5,10 +5,7 @@
     const search = document.getElementById('customerSearch');
     if (!search) return;
     document.getElementById('customerTableBody').innerHTML = '<tr><td colspan="5" class="table-empty">Đang tải...</td></tr>';
-    google.script.run
-      .withSuccessHandler(renderCustomers)
-      .withFailureHandler(handleCustomerError)
-      .getCustomers({ query: search.value });
+    apiCall('getCustomers', [{ query: search.value }], renderCustomers, handleCustomerError);
   }
 
   function renderCustomers(customers) {
@@ -29,7 +26,7 @@
   }
 
   function editCustomer(customerId) {
-    google.script.run.withSuccessHandler(function (customer) {
+    apiCall('getCustomer', [customerId], function (customer) {
       if (!customer) { app.toast('Không tìm thấy hồ sơ khách hàng.', 'error'); return; }
       customerUi.editingId = customerId;
       document.getElementById('customerFormTitle').textContent = 'Chỉnh sửa khách hàng';
@@ -45,16 +42,16 @@
       document.getElementById('saveCustomerButton').textContent = 'Lưu thay đổi';
       document.getElementById('customerFullName').focus();
       loadCustomerFiles(customerId);
-    }).withFailureHandler(handleCustomerError).getCustomer(customerId);
+    }, handleCustomerError);
   }
 
   function archiveCustomer(customerId) {
     if (!window.confirm('Lưu trữ khách hàng này? Hồ sơ và booking cũ vẫn được giữ lại.')) return;
-    google.script.run.withSuccessHandler(function () {
+    apiCall('archiveCustomer', [customerId], function () {
       app.toast('Đã lưu trữ khách hàng.');
       loadCustomers();
       app.loadDashboard();
-    }).withFailureHandler(handleCustomerError).archiveCustomer(customerId);
+    }, handleCustomerError);
   }
 
   function resetCustomerForm() {
@@ -70,11 +67,11 @@
 
   function loadCustomerFiles(customerId) {
     setCustomerFiles(customerId, null);
-    google.script.run.withSuccessHandler(function (files) {
+    apiCall('getCustomerFiles', [customerId], function (files) {
       setCustomerFiles(customerId, files || []);
-    }).withFailureHandler(function (error) {
+    }, function (error) {
       app.toast(error && error.message ? error.message : 'Không thể tải file của khách.', 'error');
-    }).getCustomerFiles(customerId);
+    });
   }
 
   function setCustomerFiles(customerId, files) {
@@ -116,13 +113,13 @@
       const data = Object.fromEntries(new FormData(form).entries());
       submit.disabled = true;
       submit.textContent = customerUi.editingId ? 'Đang lưu...' : 'Đang tạo...';
-      const runner = google.script.run.withSuccessHandler(function () {
+      const success = function () {
         app.toast(customerUi.editingId ? 'Đã cập nhật khách hàng.' : 'Đã tạo hồ sơ khách hàng.');
         resetCustomerForm();
         loadCustomers();
         app.loadDashboard();
-      }).withFailureHandler(handleCustomerError);
-      if (customerUi.editingId) runner.updateCustomer(customerUi.editingId, data); else runner.createCustomer(data);
+      };
+      if (customerUi.editingId) apiCall('updateCustomer', [customerUi.editingId, data], success, handleCustomerError); else apiCall('createCustomer', [data], success, handleCustomerError);
       window.setTimeout(function () { submit.disabled = false; submit.textContent = customerUi.editingId ? 'Lưu thay đổi' : 'Lưu khách hàng'; }, 400);
     });
     document.getElementById('customerSearch').addEventListener('input', function () {
@@ -140,17 +137,17 @@
       button.disabled = true;
       button.textContent = 'Đang tải...';
       readCustomerFile(file).then(function (base64) {
-        google.script.run.withSuccessHandler(function () {
+        apiCall('uploadCustomerFile', [{ CustomerID: customerUi.editingId, FileType: document.getElementById('customerFileType').value, FileName: file.name, MimeType: file.type || 'application/octet-stream', Base64: base64 }], function () {
           app.toast('Đã tải file lên hồ sơ khách.');
           input.value = '';
           button.disabled = false;
           button.textContent = 'Tải file lên';
           loadCustomerFiles(customerUi.editingId);
-        }).withFailureHandler(function (error) {
+        }, function (error) {
           button.disabled = false;
           button.textContent = 'Tải file lên';
           handleCustomerError(error);
-        }).uploadCustomerFile({ CustomerID: customerUi.editingId, FileType: document.getElementById('customerFileType').value, FileName: file.name, MimeType: file.type || 'application/octet-stream', Base64: base64 });
+        });
       }).catch(function (error) { button.disabled = false; button.textContent = 'Tải file lên'; handleCustomerError(error); });
     });
   });

@@ -1,9 +1,12 @@
 <script>
   function loadSettings() {
-    google.script.run.withSuccessHandler(renderEmployees).withFailureHandler(handleSettingsError).getEmployees();
-    google.script.run.withSuccessHandler(renderServices).withFailureHandler(handleSettingsError).getServices();
+    apiCall('getEmployees', [], renderEmployees, handleSettingsError);
+    apiCall('getServices', [], renderServices, handleSettingsError);
+    if (authUi.user && authUi.user.Role === 'Admin') apiCall('getUsers', [], renderUsers, handleSettingsError);
   }
   function renderEmployees(items) {
+    const selector = document.getElementById('userEmployee');
+    if (selector) selector.innerHTML = '<option value="">Không liên kết nhân viên</option>' + items.map(function (item) { return '<option value="' + app.escape(item.EmployeeID) + '">' + app.escape(item.FullName) + '</option>'; }).join('');
     document.getElementById('employeeList').innerHTML = items.length ? items.map(function (item) {
       return '<div class="catalog-item"><div><strong>' + app.escape(item.FullName) + '</strong><small>' + app.escape(item.Role || '—') + ' · ' + app.escape(item.EmployeeID) + '</small></div><button class="icon-button danger" onclick="archiveEmployeeUi(\'' + app.escape(item.EmployeeID) + '\')">Lưu trữ</button></div>';
     }).join('') : '<div class="empty-state">Chưa có nhân viên.</div>';
@@ -13,11 +16,19 @@
       return '<div class="catalog-item"><div><strong>' + app.escape(item.ServiceName) + '</strong><small>' + app.escape(item.Duration) + ' phút · ' + app.currency(item.Price) + ' · ' + app.escape(item.ServiceID) + '</small></div><button class="icon-button danger" onclick="archiveServiceUi(\'' + app.escape(item.ServiceID) + '\')">Lưu trữ</button></div>';
     }).join('') : '<div class="empty-state">Chưa có dịch vụ.</div>';
   }
-  function archiveEmployeeUi(id) { if (confirm('Lưu trữ nhân viên này?')) google.script.run.withSuccessHandler(loadSettings).withFailureHandler(handleSettingsError).archiveEmployee(id); }
-  function archiveServiceUi(id) { if (confirm('Lưu trữ dịch vụ này?')) google.script.run.withSuccessHandler(loadSettings).withFailureHandler(handleSettingsError).archiveService(id); }
+  function renderUsers(items) {
+    document.getElementById('userList').innerHTML = items.length ? items.map(function (item) {
+      const canDeactivate = authUi.user && item.UserID !== authUi.user.UserID && item.Status === 'Active';
+      return '<div class="catalog-item"><div><strong>' + app.escape(item.FullName) + '</strong><small>' + app.escape(item.Username) + ' · ' + app.escape(item.Role) + (item.EmployeeID ? ' · ' + app.escape(item.EmployeeID) : '') + '</small></div>' + (canDeactivate ? '<button class="icon-button danger" onclick="deactivateUserUi(\'' + app.escape(item.UserID) + '\')">Khóa</button>' : '') + '</div>';
+    }).join('') : '<div class="empty-state">Chưa có tài khoản nào.</div>';
+  }
+  function archiveEmployeeUi(id) { if (confirm('Lưu trữ nhân viên này?')) apiCall('archiveEmployee', [id], loadSettings, handleSettingsError); }
+  function archiveServiceUi(id) { if (confirm('Lưu trữ dịch vụ này?')) apiCall('archiveService', [id], loadSettings, handleSettingsError); }
+  function deactivateUserUi(id) { if (confirm('Khóa tài khoản này?')) apiCall('deactivateUser', [id], loadSettings, handleSettingsError); }
   function handleSettingsError(error) { app.toast(error && error.message ? error.message : 'Không thể cập nhật cài đặt.', 'error'); }
   document.addEventListener('DOMContentLoaded', function () {
-    document.getElementById('employeeForm').addEventListener('submit', function (event) { event.preventDefault(); google.script.run.withSuccessHandler(function () { event.currentTarget.reset(); app.toast('Đã thêm nhân viên.'); loadSettings(); }).withFailureHandler(handleSettingsError).createEmployee(Object.fromEntries(new FormData(event.currentTarget).entries())); });
-    document.getElementById('serviceForm').addEventListener('submit', function (event) { event.preventDefault(); google.script.run.withSuccessHandler(function () { event.currentTarget.reset(); app.toast('Đã thêm dịch vụ.'); loadSettings(); }).withFailureHandler(handleSettingsError).createService(Object.fromEntries(new FormData(event.currentTarget).entries())); });
+    document.getElementById('employeeForm').addEventListener('submit', function (event) { event.preventDefault(); apiCall('createEmployee', [Object.fromEntries(new FormData(event.currentTarget).entries())], function () { event.currentTarget.reset(); app.toast('Đã thêm nhân viên.'); loadSettings(); }, handleSettingsError); });
+    document.getElementById('serviceForm').addEventListener('submit', function (event) { event.preventDefault(); apiCall('createService', [Object.fromEntries(new FormData(event.currentTarget).entries())], function () { event.currentTarget.reset(); app.toast('Đã thêm dịch vụ.'); loadSettings(); }, handleSettingsError); });
+    document.getElementById('userForm').addEventListener('submit', function (event) { event.preventDefault(); apiCall('createUser', [Object.fromEntries(new FormData(event.currentTarget).entries())], function () { event.currentTarget.reset(); app.toast('Đã tạo tài khoản.'); loadSettings(); }, handleSettingsError); });
   });
 </script>

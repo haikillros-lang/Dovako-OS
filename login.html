@@ -1,0 +1,14 @@
+<div id="loginScreen" class="login-screen">
+  <section class="login-card">
+    <div class="login-brand"><span class="brand-mark">D</span><div><strong>DOVAKO OS</strong><small>Hệ thống vận hành nội bộ</small></div></div>
+    <div id="loginPanel">
+      <h1>Đăng nhập</h1><p>Nhập tài khoản được quản lý bởi DOVAKO.</p>
+      <form id="loginForm" class="login-form"><label>Tên đăng nhập<input name="Username" autocomplete="username" required></label><label>Mật khẩu<input name="Password" type="password" autocomplete="current-password" required></label><button class="button primary" type="submit">Đăng nhập</button></form>
+    </div>
+    <div id="bootstrapPanel" class="hidden">
+      <h1>Thiết lập quản trị viên</h1><p>Tạo tài khoản Admin đầu tiên cho DOVAKO OS.</p>
+      <form id="bootstrapForm" class="login-form"><label>Họ và tên<input name="FullName" autocomplete="name" required></label><label>Tên đăng nhập<input name="Username" autocomplete="username" required placeholder="admin"></label><label>Mật khẩu<input name="Password" type="password" autocomplete="new-password" minlength="8" required></label><label>Nhập lại mật khẩu<input name="ConfirmPassword" type="password" autocomplete="new-password" minlength="8" required></label><button class="button primary" type="submit">Tạo tài khoản Admin</button></form>
+    </div>
+    <p id="authMessage" class="auth-message"></p>
+  </section>
+</div>
