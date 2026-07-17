@@ -1,0 +1,107 @@
+<script>
+  const bookingUi = { options: { customers: [], employees: [], services: [], beds: [] }, timer: null };
+
+  function loadBookingScreen() {
+    google.script.run.withSuccessHandler(function (options) {
+      bookingUi.options = options || bookingUi.options;
+      renderBookingOptions();
+      loadBookings();
+    }).withFailureHandler(handleBookingError).getBookingOptions();
+  }
+
+  function renderBookingOptions() {
+    const options = bookingUi.options;
+    fillSelect('bookingCustomer', options.customers, 'CustomerID', function (item) { return item.FullName + ' · ' + item.Phone; });
+    fillSelect('bookingEmployee', options.employees, 'EmployeeID', function (item) { return item.FullName + (item.Role ? ' · ' + item.Role : ''); });
+    fillSelect('bookingService', options.services, 'ServiceID', function (item) { return item.ServiceName + ' · ' + app.currency(item.Price); });
+    const bed = document.getElementById('bookingBed');
+    bed.innerHTML = '<option value="">Chọn giường</option>' + (options.beds || []).map(function (item) { return '<option value="' + app.escape(item) + '">Giường ' + app.escape(item) + '</option>'; }).join('');
+    const missing = [];
+    if (!options.employees || !options.employees.length) missing.push('nhân viên');
+    if (!options.services || !options.services.length) missing.push('dịch vụ');
+    const notice = document.getElementById('bookingSetupNotice');
+    notice.classList.toggle('hidden', !missing.length);
+    notice.textContent = missing.length ? 'Cần thêm ' + missing.join(' và ') + ' trong mục Cài đặt trước khi tạo booking.' : '';
+  }
+
+  function fillSelect(id, values, idKey, label) {
+    const select = document.getElementById(id);
+    const current = select.value;
+    select.innerHTML = '<option value="">Chọn</option>' + (values || []).map(function (item) {
+      return '<option value="' + app.escape(item[idKey]) + '">' + app.escape(label(item)) + '</option>';
+    }).join('');
+    select.value = current;
+  }
+
+  function loadBookings() {
+    const date = document.getElementById('bookingFilterDate').value;
+    document.getElementById('bookingList').innerHTML = '<div class="empty-state">Đang tải...</div>';
+    google.script.run.withSuccessHandler(renderBookings).withFailureHandler(handleBookingError)
+      .getBookings({ date: date, includeCancelled: true });
+  }
+
+  function renderBookings(bookings) {
+    const customerMap = (bookingUi.options.customers || []).reduce(function (map, item) { map[item.CustomerID] = item.FullName; return map; }, {});
+    const serviceMap = (bookingUi.options.services || []).reduce(function (map, item) { map[item.ServiceID] = item.ServiceName; return map; }, {});
+    document.getElementById('bookingCount').textContent = (bookings || []).length + ' lịch';
+    document.getElementById('bookingList').innerHTML = bookings && bookings.length ? bookings.map(function (booking) {
+      const action = bookingAction(booking);
+      return '<article class="booking-item"><time>' + app.escape(booking.StartTime) + '<small>' + app.escape(booking.EndTime) + '</small></time><div class="booking-info"><strong>' + app.escape(customerMap[booking.CustomerID] || booking.CustomerID) + '</strong><p>' + app.escape(serviceMap[booking.ServiceID] || booking.ServiceID) + ' · Giường ' + app.escape(booking.BedID) + '</p><span class="status-chip">' + app.escape(booking.Status) + '</span></div><div class="booking-actions">' + action + '</div></article>';
+    }).join('') : '<div class="empty-state">Chưa có booking trong ngày đã chọn.</div>';
+  }
+
+  function bookingAction(booking) {
+    const id = app.escape(booking.BookingID);
+    if (booking.Status === 'Chưa xác nhận') return '<button class="icon-button" onclick="bookingStatus(\'' + id + '\',\'confirm\')">Xác nhận</button><button class="icon-button danger" onclick="bookingStatus(\'' + id + '\',\'cancel\')">Hủy</button>';
+    if (booking.Status === 'Đã xác nhận') return '<button class="icon-button" onclick="bookingStatus(\'' + id + '\',\'checkin\')">Check-in</button><button class="icon-button danger" onclick="bookingStatus(\'' + id + '\',\'cancel\')">Hủy</button>';
+    if (booking.Status === 'Đang phục vụ') return '<button class="icon-button" onclick="bookingStatus(\'' + id + '\',\'complete\')">Hoàn thành</button>';
+    return '';
+  }
+
+  function bookingStatus(id, action) {
+    const call = action === 'confirm' ? 'confirmBooking' : action === 'checkin' ? 'checkInBooking' : action === 'complete' ? 'completeBooking' : 'cancelBooking';
+    const note = action === 'cancel' ? window.prompt('Lý do hủy lịch (không bắt buộc):') : null;
+    if (action === 'cancel' && note === null) return;
+    google.script.run.withSuccessHandler(function () { app.toast('Đã cập nhật trạng thái booking.'); loadBookings(); app.loadDashboard(); })
+      .withFailureHandler(handleBookingError)[call](id, note);
+  }
+
+  function handleBookingError(error) { app.toast(error && error.message ? error.message : 'Không thể xử lý booking.', 'error'); }
+
+  function bookingRecalculate() {
+    const price = Number(document.getElementById('bookingPrice').value || 0);
+    const discount = Number(document.getElementById('bookingDiscount').value || 0);
+    document.getElementById('bookingFinalPrice').value = Math.max(0, price - discount);
+  }
+
+  function bookingUseService() {
+    const id = document.getElementById('bookingService').value;
+    const service = (bookingUi.options.services || []).find(function (item) { return item.ServiceID === id; });
+    if (!service) return;
+    document.getElementById('bookingPrice').value = Number(service.Price || 0);
+    const start = document.getElementById('bookingStart').value;
+    if (start && service.Duration) {
+      const minutes = start.split(':').map(Number); const end = minutes[0] * 60 + minutes[1] + Number(service.Duration);
+      document.getElementById('bookingEnd').value = String(Math.floor(end / 60) % 24).padStart(2, '0') + ':' + String(end % 60).padStart(2, '0');
+    }
+    bookingRecalculate();
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('bookingDate').value = today;
+    document.getElementById('bookingFilterDate').value = today;
+    document.getElementById('bookingForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      const button = document.getElementById('saveBookingButton'); button.disabled = true;
+      google.script.run.withSuccessHandler(function () {
+        app.toast('Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; bookingRecalculate(); loadBookings(); app.loadDashboard(); button.disabled = false;
+      }).withFailureHandler(function (error) { button.disabled = false; handleBookingError(error); }).createBooking(data);
+    });
+    document.getElementById('bookingService').addEventListener('change', bookingUseService);
+    document.getElementById('bookingPrice').addEventListener('input', bookingRecalculate);
+    document.getElementById('bookingDiscount').addEventListener('input', bookingRecalculate);
+    document.getElementById('bookingFilterDate').addEventListener('change', loadBookings);
+  });
+</script>

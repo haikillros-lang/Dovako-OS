@@ -1,0 +1,17 @@
+<section class="report-layout">
+  <div class="panel report-filter">
+    <div class="panel-head compact">
+      <div><h2>Báo cáo doanh thu</h2><p>Chỉ tính booking đã hoàn thành.</p></div>
+      <div class="report-filter-fields">
+        <label>Từ ngày <input id="reportFrom" type="date"></label>
+        <label>Đến ngày <input id="reportTo" type="date"></label>
+        <button class="button primary" type="button" onclick="loadReports()">Xem báo cáo</button>
+      </div>
+    </div>
+  </div>
+  <div id="reportSummary" class="metric-grid"></div>
+  <div class="report-tables">
+    <section class="panel"><div class="panel-head compact"><div><h2>Theo dịch vụ</h2></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Dịch vụ</th><th>Số ca</th><th>Doanh thu</th></tr></thead><tbody id="reportServices"><tr><td colspan="3" class="table-empty">Chọn khoảng thời gian để xem báo cáo.</td></tr></tbody></table></div></section>
+    <section class="panel"><div class="panel-head compact"><div><h2>Theo nhân viên</h2></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nhân viên</th><th>Số ca</th><th>Doanh thu</th></tr></thead><tbody id="reportEmployees"><tr><td colspan="3" class="table-empty">Chọn khoảng thời gian để xem báo cáo.</td></tr></tbody></table></div></section>
+  </div>
+</section>

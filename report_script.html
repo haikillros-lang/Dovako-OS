@@ -1,0 +1,22 @@
+<script>
+  function reportDateValue(date) { return date.toISOString().slice(0, 10); }
+  function reportRows(rows, emptyText) {
+    if (!rows || !rows.length) return '<tr><td colspan="3" class="table-empty">' + app.escape(emptyText) + '</td></tr>';
+    return rows.map(function (row) { return '<tr><td><strong>' + app.escape(row.name) + '</strong></td><td>' + app.escape(row.bookings) + '</td><td>' + app.currency(row.revenue) + '</td></tr>'; }).join('');
+  }
+  function loadReports() {
+    const from = document.getElementById('reportFrom');
+    const to = document.getElementById('reportTo');
+    if (!from.value || !to.value) { const now = new Date(); from.value = reportDateValue(new Date(now.getFullYear(), now.getMonth(), 1)); to.value = reportDateValue(now); }
+    document.getElementById('reportSummary').innerHTML = '<div class="loading-card">Đang tải báo cáo...</div>';
+    google.script.run.withSuccessHandler(renderReport).withFailureHandler(function (error) { app.toast(error && error.message ? error.message : 'Không thể tải báo cáo.', 'error'); }).getReport({ From: from.value, To: to.value });
+  }
+  function renderReport(report) {
+    const summary = report.summary || {};
+    const cards = [['Doanh thu', app.currency(summary.revenue), report.from + ' – ' + report.to], ['Booking hoàn thành', summary.completedBookings || 0, 'Trên ' + (summary.totalBookings || 0) + ' booking'], ['Hủy / không đến', summary.cancelledBookings || 0, 'Trong khoảng đã chọn']];
+    document.getElementById('reportSummary').innerHTML = cards.map(function (card) { return '<article class="metric-card"><p>' + app.escape(card[0]) + '</p><strong>' + app.escape(card[1]) + '</strong><span>' + app.escape(card[2]) + '</span></article>'; }).join('');
+    document.getElementById('reportServices').innerHTML = reportRows(report.byService, 'Chưa có booking hoàn thành.');
+    document.getElementById('reportEmployees').innerHTML = reportRows(report.byEmployee, 'Chưa có booking hoàn thành.');
+  }
+  document.addEventListener('DOMContentLoaded', function () { const now = new Date(); document.getElementById('reportFrom').value = reportDateValue(new Date(now.getFullYear(), now.getMonth(), 1)); document.getElementById('reportTo').value = reportDateValue(now); });
+</script>

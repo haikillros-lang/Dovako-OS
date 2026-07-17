@@ -1,0 +1,41 @@
+<div class="customer-layout">
+  <section class="panel customer-form-panel">
+    <div class="panel-head compact">
+      <div><h2 id="customerFormTitle">Thêm khách hàng</h2><p>Thông tin được lưu trực tiếp vào DOVAKO DATABASE.</p></div>
+      <button id="cancelEditButton" class="text-button hidden" type="button" onclick="resetCustomerForm()">Hủy chỉnh sửa</button>
+    </div>
+    <form id="customerForm" class="form-grid" novalidate>
+      <label class="form-field wide"><span>Họ và tên <b>*</b></span><input id="customerFullName" name="FullName" autocomplete="name" required maxlength="120" placeholder="Nguyễn Văn A"></label>
+      <label class="form-field"><span>Số điện thoại <b>*</b></span><input id="customerPhone" name="Phone" inputmode="tel" autocomplete="tel" required placeholder="0901234567"></label>
+      <label class="form-field"><span>Ngày sinh</span><input id="customerBirthday" name="Birthday" type="date"></label>
+      <label class="form-field"><span>Giới tính</span><select id="customerGender" name="Gender"><option value="">Chọn</option><option>Nam</option><option>Nữ</option><option>Khác</option></select></label>
+      <label class="form-field"><span>Nghề nghiệp</span><input id="customerOccupation" name="Occupation" maxlength="120" placeholder="Nhân viên văn phòng"></label>
+      <label class="form-field"><span>Nguồn khách</span><input id="customerSource" name="Source" maxlength="100" placeholder="Facebook, Google, giới thiệu..."></label>
+      <label class="form-field wide"><span>Địa chỉ</span><input id="customerAddress" name="Address" maxlength="300" autocomplete="street-address" placeholder="Quận, thành phố"></label>
+      <label class="form-field wide"><span>Ghi chú</span><textarea id="customerNote" name="Note" maxlength="2000" rows="3" placeholder="Lưu ý cho lễ tân hoặc kỹ thuật viên"></textarea></label>
+      <div class="form-actions wide"><button id="saveCustomerButton" class="button primary" type="submit">Lưu khách hàng</button></div>
+    </form>
+    <div class="customer-files" id="customerFilesPanel">
+      <div class="panel-head compact"><div><h2>Phiếu và hình ảnh</h2><p id="customerFilesHint">Lưu hồ sơ khách trước, sau đó bấm Sửa để tải phiếu viết tay hoặc ảnh.</p></div></div>
+      <form id="customerFileForm" class="file-form">
+        <label class="form-field"><span>Loại file</span><select id="customerFileType"><option value="Assessment">Phiếu tình trạng</option><option value="Before">Ảnh trước buổi</option><option value="After">Ảnh sau buổi</option><option value="Other">Khác</option></select></label>
+        <label class="form-field wide"><span>Chọn file (tối đa 5 MB)</span><input id="customerFileInput" type="file" accept="image/*,.pdf"></label>
+        <div class="form-actions wide"><button id="uploadCustomerFileButton" class="button secondary" type="submit" disabled>Tải file lên</button></div>
+      </form>
+      <div id="customerFilesList" class="file-list"><p class="file-empty">Chưa có file nào.</p></div>
+    </div>
+  </section>
+
+  <section class="panel customer-list-panel">
+    <div class="panel-head compact">
+      <div><h2>Danh sách khách hàng</h2><p id="customerCount">Đang tải...</p></div>
+      <label class="search-box"><span>⌕</span><input id="customerSearch" type="search" placeholder="Tìm tên, SĐT hoặc mã khách"></label>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Khách hàng</th><th>Số điện thoại</th><th>Nguồn</th><th>Trạng thái</th><th></th></tr></thead>
+        <tbody id="customerTableBody"><tr><td colspan="5" class="table-empty">Đang tải...</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</div>

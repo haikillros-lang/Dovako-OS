@@ -1,0 +1,25 @@
+<div class="booking-layout">
+  <section class="panel booking-form-panel">
+    <div class="panel-head compact"><div><h2>Tạo Booking</h2><p>Lịch mới bắt đầu ở trạng thái chưa xác nhận.</p></div></div>
+    <div id="bookingSetupNotice" class="notice hidden"></div>
+    <form id="bookingForm" class="form-grid" novalidate>
+      <label class="form-field wide"><span>Khách hàng <b>*</b></span><select id="bookingCustomer" name="CustomerID" required><option value="">Chọn khách hàng</option></select></label>
+      <label class="form-field"><span>Dịch vụ <b>*</b></span><select id="bookingService" name="ServiceID" required><option value="">Chọn dịch vụ</option></select></label>
+      <label class="form-field"><span>Nhân viên <b>*</b></span><select id="bookingEmployee" name="EmployeeID" required><option value="">Chọn nhân viên</option></select></label>
+      <label class="form-field"><span>Ngày <b>*</b></span><input id="bookingDate" name="BookingDate" type="date" required></label>
+      <label class="form-field"><span>Giường <b>*</b></span><select id="bookingBed" name="BedID" required><option value="">Chọn giường</option></select></label>
+      <label class="form-field"><span>Giờ bắt đầu <b>*</b></span><input id="bookingStart" name="StartTime" type="time" value="09:00" required></label>
+      <label class="form-field"><span>Giờ kết thúc <b>*</b></span><input id="bookingEnd" name="EndTime" type="time" value="10:00" required></label>
+      <label class="form-field"><span>Giá dịch vụ</span><input id="bookingPrice" name="Price" inputmode="numeric" type="number" min="0" value="0" required></label>
+      <label class="form-field"><span>Giảm giá</span><input id="bookingDiscount" name="Discount" inputmode="numeric" type="number" min="0" value="0"></label>
+      <label class="form-field wide"><span>Thành tiền</span><input id="bookingFinalPrice" name="FinalPrice" type="number" min="0" value="0" readonly></label>
+      <label class="form-field wide"><span>Ghi chú</span><textarea id="bookingNote" name="Note" rows="2" maxlength="2000" placeholder="Đã gọi xác nhận, lưu ý vùng cơ thể..."></textarea></label>
+      <div class="form-actions wide"><button id="saveBookingButton" class="button primary" type="submit">Tạo Booking</button></div>
+    </form>
+  </section>
+
+  <section class="panel booking-list-panel">
+    <div class="panel-head compact"><div><h2>Lịch trong ngày</h2><p id="bookingCount">Đang tải...</p></div><input id="bookingFilterDate" class="date-filter" type="date"></div>
+    <div id="bookingList" class="booking-list"><div class="empty-state">Đang tải...</div></div>
+  </section>
+</div>

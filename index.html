@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <?!= include('style'); ?>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand"><span class="brand-mark">D</span><span>DOVAKO OS</span></div>
+        <nav class="nav-menu" aria-label="Điều hướng chính">
+          <button class="nav-item active" data-view="dashboard" onclick="app.navigate('dashboard')">Tổng quan</button>
+          <button class="nav-item" data-view="customers" onclick="app.navigate('customers')">Khách hàng</button>
+          <button class="nav-item" data-view="bookings" onclick="app.navigate('bookings')">Booking</button>
+          <button class="nav-item" data-view="reports" onclick="app.navigate('reports')">Báo cáo</button>
+          <button class="nav-item" data-view="settings" onclick="app.navigate('settings')">Cài đặt</button>
+        </nav>
+        <div class="sidebar-foot">DOVAKO Stretching<br>v1.0</div>
+      </aside>
+
+      <main class="main-content">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow" id="pageEyebrow">Vận hành hằng ngày</p>
+            <h1 id="pageTitle">Tổng quan</h1>
+          </div>
+          <div id="todayLabel" class="today-label"></div>
+        </header>
+
+        <section id="view-dashboard" class="view active-view">
+          <div id="dashboardCards" class="metric-grid" aria-live="polite"></div>
+          <div class="panel">
+            <div class="panel-head">
+              <div><h2>Booking hôm nay</h2><p>Lịch hẹn theo thứ tự thời gian</p></div>
+              <button class="button secondary" onclick="app.navigate('bookings')">Xem Booking</button>
+            </div>
+            <div id="todaySchedule" class="schedule-list"><div class="empty-state">Đang tải dữ liệu...</div></div>
+          </div>
+        </section>
+
+        <section id="view-customers" class="view">
+          <?!= include('customer'); ?>
+        </section>
+
+        <section id="view-bookings" class="view">
+          <?!= include('booking'); ?>
+        </section>
+
+        <section id="view-reports" class="view">
+          <?!= include('report'); ?>
+        </section>
+
+        <section id="view-settings" class="view">
+          <?!= include('settings'); ?>
+        </section>
+      </main>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script>
+      const app = {
+        titles: {
+          dashboard: ['Tổng quan', 'Vận hành hằng ngày'],
+          customers: ['Khách hàng', 'Hồ sơ và lịch sử khách hàng'],
+          bookings: ['Booking', 'Lịch hẹn và trạng thái phục vụ'],
+          reports: ['Báo cáo', 'Doanh thu theo ngày, dịch vụ và nhân viên'],
+          settings: ['Cài đặt', 'Danh mục nhân viên và dịch vụ']
+        },
+        navigate(viewName) {
+          document.querySelectorAll('.view').forEach(function (view) {
+            view.classList.toggle('active-view', view.id === 'view-' + viewName);
+          });
+          document.querySelectorAll('.nav-item').forEach(function (item) {
+            item.classList.toggle('active', item.dataset.view === viewName);
+          });
+          document.getElementById('pageTitle').textContent = this.titles[viewName][0];
+          document.getElementById('pageEyebrow').textContent = this.titles[viewName][1];
+          if (viewName === 'dashboard') this.loadDashboard();
+          if (viewName === 'customers') loadCustomers();
+          if (viewName === 'bookings') loadBookingScreen();
+          if (viewName === 'reports') loadReports();
+          if (viewName === 'settings') loadSettings();
+        },
+        loadDashboard() {
+          document.getElementById('dashboardCards').innerHTML = '<div class="loading-card">Đang tải tổng quan...</div>';
+          google.script.run
+            .withSuccessHandler(this.renderDashboard.bind(this))
+            .withFailureHandler(this.handleError.bind(this))
+            .getDashboard();
+        },
+        renderDashboard(data) {
+          const revenue = data.revenue || {};
+          const booking = data.bookings || {};
+          const customers = data.customers || {};
+          const cards = [
+            ['Doanh thu hôm nay', this.currency(revenue.today), 'Chỉ tính ca đã hoàn thành'],
+            ['Doanh thu tuần', this.currency(revenue.week), 'Từ thứ Hai đến Chủ nhật'],
+            ['Doanh thu tháng', this.currency(revenue.month), 'Tháng hiện tại'],
+            ['Booking hôm nay', booking.activeToday || 0, (booking.pendingConfirmation || 0) + ' lịch chưa xác nhận'],
+            ['Khách mới hôm nay', customers.newToday || 0, 'Tổng hồ sơ: ' + (customers.total || 0)],
+            ['Đang phục vụ', booking.serving || 0, 'Đã hoàn thành: ' + (booking.completed || 0)]
+          ];
+          document.getElementById('dashboardCards').innerHTML = cards.map(function (card) {
+            return '<article class="metric-card"><p>' + app.escape(card[0]) + '</p><strong>' + app.escape(card[1]) + '</strong><span>' + app.escape(card[2]) + '</span></article>';
+          }).join('');
+          const schedule = data.todaySchedule || [];
+          document.getElementById('todaySchedule').innerHTML = schedule.length ? schedule.map(function (item) {
+            return '<article class="schedule-item"><time>' + app.escape(item.StartTime) + '</time><div><strong>' + app.escape(item.CustomerName) + '</strong><p>' + app.escape(item.ServiceID) + ' · Giường ' + app.escape(item.BedID) + '</p></div><span class="status-chip">' + app.escape(item.Status) + '</span></article>';
+          }).join('') : '<div class="empty-state">Chưa có booking nào hôm nay.</div>';
+        },
+        handleError(error) {
+          const message = error && error.message ? error.message : 'Đã xảy ra lỗi. Vui lòng thử lại.';
+          this.toast(message, 'error');
+          document.getElementById('dashboardCards').innerHTML = '<div class="empty-state">Không tải được dữ liệu tổng quan.</div>';
+        },
+        toast(message, type) {
+          const toast = document.getElementById('toast');
+          toast.textContent = message;
+          toast.className = 'toast show ' + (type || 'success');
+          window.clearTimeout(this.toastTimer);
+          this.toastTimer = window.setTimeout(function () { toast.className = 'toast'; }, 3500);
+        },
+        currency(value) {
+          return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(Number(value || 0));
+        },
+        escape(value) {
+          return String(value === null || value === undefined ? '' : value)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+      };
+      document.getElementById('todayLabel').textContent = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
+      document.addEventListener('DOMContentLoaded', function () { app.loadDashboard(); });
+    </script>
+    <?!= include('customer_script'); ?>
+    <?!= include('booking_script'); ?>
+    <?!= include('report_script'); ?>
+    <?!= include('settings_script'); ?>
+  </body>
+</html>
