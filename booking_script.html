@@ -1,11 +1,12 @@
 <script>
-  const bookingUi = { options: { customers: [], employees: [], services: [], beds: [] }, timer: null };
+  const bookingUi = { options: { customers: [], employees: [], services: [], beds: [] }, availability: null, timer: null };
 
   function loadBookingScreen() {
     google.script.run.withSuccessHandler(function (options) {
       bookingUi.options = options || bookingUi.options;
       renderBookingOptions();
       loadBookings();
+      loadBookingAvailability();
     }).withFailureHandler(handleBookingError).getBookingOptions();
   }
 
@@ -40,6 +41,69 @@
       .getBookings({ date: date, includeCancelled: true });
   }
 
+  function selectedServiceDuration() {
+    const service = (bookingUi.options.services || []).find(function (item) { return item.ServiceID === document.getElementById('bookingService').value; });
+    return service ? Number(service.Duration || 0) : 0;
+  }
+
+  function bookingDuration() {
+    const start = document.getElementById('bookingStart').value;
+    const end = document.getElementById('bookingEnd').value;
+    if (!start || !end) return selectedServiceDuration() || 60;
+    const startPart = start.split(':').map(Number); const endPart = end.split(':').map(Number);
+    const duration = (endPart[0] * 60 + endPart[1]) - (startPart[0] * 60 + startPart[1]);
+    return duration > 0 ? duration : (selectedServiceDuration() || 60);
+  }
+
+  function loadBookingAvailability() {
+    const date = document.getElementById('bookingDate').value;
+    if (!date) return;
+    document.getElementById('bookingAvailability').innerHTML = '<div class="empty-state">Đang tính lịch trống...</div>';
+    google.script.run.withSuccessHandler(renderBookingAvailability).withFailureHandler(function (error) {
+      document.getElementById('bookingAvailability').innerHTML = '<div class="empty-state">Không tải được lịch trống.</div>';
+      handleBookingError(error);
+    }).getBookingAvailability({ date: date, duration: bookingDuration() });
+  }
+
+  function renderBookingAvailability(data) {
+    bookingUi.availability = data || { slots: [] };
+    const slots = bookingUi.availability.slots || [];
+    document.getElementById('availabilityCaption').textContent = (data.duration || 60) + ' phút · ' + (data.employeesConfigured || 0) + ' nhân viên đang hoạt động';
+    if (!data.employeesConfigured) {
+      document.getElementById('bookingAvailability').innerHTML = '<div class="empty-state">Chưa có nhân viên. Hãy thêm trong mục Cài đặt.</div>';
+      return;
+    }
+    document.getElementById('bookingAvailability').innerHTML = slots.map(function (slot) {
+      const names = slot.availableEmployees.map(function (employee) { return employee.FullName; });
+      return '<article class="availability-item ' + (!slot.employeeCount || !slot.bedCount ? 'unavailable' : '') + '"><button type="button" onclick="useAvailabilitySlot(\'' + slot.StartTime + '\',\'' + slot.EndTime + '\')"><strong>' + app.escape(slot.StartTime) + ' – ' + app.escape(slot.EndTime) + '</strong><span>' + app.escape(names.length ? names.join(', ') : 'Không có nhân viên trống') + '</span><small>' + slot.bedCount + ' giường trống</small></button></article>';
+    }).join('') || '<div class="empty-state">Không còn khung giờ phù hợp trong ngày này.</div>';
+    applySelectedAvailability();
+  }
+
+  function matchingAvailabilitySlot() {
+    const data = bookingUi.availability;
+    if (!data || !data.slots) return null;
+    const start = document.getElementById('bookingStart').value;
+    const end = document.getElementById('bookingEnd').value;
+    return data.slots.find(function (slot) { return slot.StartTime === start && slot.EndTime === end; }) || null;
+  }
+
+  function applySelectedAvailability() {
+    const slot = matchingAvailabilitySlot();
+    if (!slot) return;
+    fillSelect('bookingEmployee', slot.availableEmployees, 'EmployeeID', function (item) { return item.FullName + (item.Role ? ' · ' + item.Role : ''); });
+    const bed = document.getElementById('bookingBed'); const current = bed.value;
+    bed.innerHTML = '<option value="">Chọn giường</option>' + slot.availableBeds.map(function (item) { return '<option value="' + app.escape(item) + '">Giường ' + app.escape(item) + '</option>'; }).join('');
+    bed.value = current;
+  }
+
+  function useAvailabilitySlot(startTime, endTime) {
+    document.getElementById('bookingStart').value = startTime;
+    document.getElementById('bookingEnd').value = endTime;
+    applySelectedAvailability();
+    document.getElementById('bookingEmployee').focus();
+  }
+
   function renderBookings(bookings) {
     const customerMap = (bookingUi.options.customers || []).reduce(function (map, item) { map[item.CustomerID] = item.FullName; return map; }, {});
     const serviceMap = (bookingUi.options.services || []).reduce(function (map, item) { map[item.ServiceID] = item.ServiceName; return map; }, {});
@@ -62,7 +126,7 @@
     const call = action === 'confirm' ? 'confirmBooking' : action === 'checkin' ? 'checkInBooking' : action === 'complete' ? 'completeBooking' : 'cancelBooking';
     const note = action === 'cancel' ? window.prompt('Lý do hủy lịch (không bắt buộc):') : null;
     if (action === 'cancel' && note === null) return;
-    google.script.run.withSuccessHandler(function () { app.toast('Đã cập nhật trạng thái booking.'); loadBookings(); app.loadDashboard(); })
+    google.script.run.withSuccessHandler(function () { app.toast('Đã cập nhật trạng thái booking.'); loadBookings(); loadBookingAvailability(); app.loadDashboard(); })
       .withFailureHandler(handleBookingError)[call](id, note);
   }
 
@@ -85,6 +149,7 @@
       document.getElementById('bookingEnd').value = String(Math.floor(end / 60) % 24).padStart(2, '0') + ':' + String(end % 60).padStart(2, '0');
     }
     bookingRecalculate();
+    loadBookingAvailability();
   }
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -96,12 +161,15 @@
       const data = Object.fromEntries(new FormData(event.currentTarget).entries());
       const button = document.getElementById('saveBookingButton'); button.disabled = true;
       google.script.run.withSuccessHandler(function () {
-        app.toast('Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; bookingRecalculate(); loadBookings(); app.loadDashboard(); button.disabled = false;
+        app.toast('Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; bookingRecalculate(); loadBookings(); loadBookingAvailability(); app.loadDashboard(); button.disabled = false;
       }).withFailureHandler(function (error) { button.disabled = false; handleBookingError(error); }).createBooking(data);
     });
     document.getElementById('bookingService').addEventListener('change', bookingUseService);
     document.getElementById('bookingPrice').addEventListener('input', bookingRecalculate);
     document.getElementById('bookingDiscount').addEventListener('input', bookingRecalculate);
     document.getElementById('bookingFilterDate').addEventListener('change', loadBookings);
+    document.getElementById('bookingDate').addEventListener('change', function () { document.getElementById('bookingFilterDate').value = this.value; loadBookings(); loadBookingAvailability(); });
+    document.getElementById('bookingStart').addEventListener('change', loadBookingAvailability);
+    document.getElementById('bookingEnd').addEventListener('change', loadBookingAvailability);
   });
 </script>

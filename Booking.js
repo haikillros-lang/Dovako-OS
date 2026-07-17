@@ -60,6 +60,36 @@ class BookingService {
     };
   }
 
+  /** Returns time slots with available staff and beds for the selected duration. */
+  static availability(input) {
+    this.initialize();
+    CatalogService.initialize();
+    const request = input || {};
+    const date = request.date ? Validator.date(request.date, 'Ngày xem lịch', { required: true }) : new Date();
+    const duration = request.duration ? Validator.integer(request.duration, 'Thời lượng', { required: true, min: 15, max: 480 }) : 60;
+    const employees = CatalogService.employees(false);
+    const bookings = this.list({ date: date, includeCancelled: false });
+    const slotMinutes = Number(CONFIG.SYSTEM.SLOT_MINUTES || 30);
+    const opening = Number(CONFIG.SYSTEM.START_HOUR) * 60;
+    const closing = Number(CONFIG.SYSTEM.END_HOUR) * 60;
+    const beds = Array.from({ length: CONFIG.SYSTEM.TOTAL_BEDS }, function (_, index) { return String(index + 1); });
+    const slots = [];
+    for (let start = opening; start + duration <= closing; start += slotMinutes) {
+      const end = start + duration;
+      const startTime = this.minutesToTime(start);
+      const endTime = this.minutesToTime(end);
+      const overlapping = bookings.filter(function (booking) { return BookingService.timesOverlap(booking.StartTime, booking.EndTime, startTime, endTime); });
+      const busyEmployees = overlapping.reduce(function (map, booking) { map[booking.EmployeeID] = true; return map; }, {});
+      const busyBeds = overlapping.reduce(function (map, booking) { map[booking.BedID] = true; return map; }, {});
+      const availableEmployees = employees.filter(function (employee) { return !busyEmployees[employee.EmployeeID]; }).map(function (employee) {
+        return { EmployeeID: employee.EmployeeID, FullName: employee.FullName, Role: employee.Role || '' };
+      });
+      const availableBeds = beds.filter(function (bed) { return !busyBeds[bed]; });
+      slots.push({ StartTime: startTime, EndTime: endTime, availableEmployees: availableEmployees, availableBeds: availableBeds, employeeCount: availableEmployees.length, bedCount: availableBeds.length });
+    }
+    return { date: DashboardService.dateKey(date), duration: duration, employeesConfigured: employees.length, slots: slots };
+  }
+
   static create(input) {
     this.initialize();
     const booking = this.normalizeForCreate(input);
@@ -226,6 +256,10 @@ class BookingService {
       Validator.timeToMinutes(endA) > Validator.timeToMinutes(startB);
   }
 
+  static minutesToTime(minutes) {
+    return String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
+  }
+
   static sortByDateTime(left, right) {
     const dateCompare = new Date(left.BookingDate).getTime() - new Date(right.BookingDate).getTime();
     if (dateCompare !== 0) return dateCompare;
@@ -259,6 +293,7 @@ function getBookings(options) { return Utils.toClient(BookingService.list(option
 function getBooking(bookingId) { return Utils.toClient(BookingService.get(bookingId)); }
 function getTodayBookings() { return Utils.toClient(BookingService.today()); }
 function getBookingOptions() { return Utils.toClient(BookingService.options()); }
+function getBookingAvailability(input) { return Utils.toClient(BookingService.availability(input)); }
 function createBooking(data) { return Utils.toClient(BookingService.create(data)); }
 function updateBooking(bookingId, changes) { return Utils.toClient(BookingService.update(bookingId, changes)); }
 function confirmBooking(bookingId) { return Utils.toClient(BookingService.confirm(bookingId)); }

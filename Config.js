@@ -178,7 +178,9 @@ const CONFIG = Object.freeze({
 
     END_HOUR: 19,
 
-    TOTAL_BEDS: 5
+    TOTAL_BEDS: 5,
+
+    SLOT_MINUTES: 30
 
   }
 
