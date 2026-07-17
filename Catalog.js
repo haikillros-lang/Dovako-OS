@@ -67,6 +67,25 @@ class CatalogService {
     return this.setStatus(CONFIG.SHEETS.SERVICES, 'ServiceID', serviceId, 'Service');
   }
 
+  /** Repairs legacy duplicate catalogue codes without deleting records. */
+  static repairDuplicateIds() {
+    this.initialize();
+    const employees = Database.repairDuplicateIds(CONFIG.SHEETS.EMPLOYEES, CONFIG.PREFIX.EMPLOYEE, {
+      idColumn: 'EmployeeID', padding: 4
+    });
+    const services = Database.repairDuplicateIds(CONFIG.SHEETS.SERVICES, CONFIG.PREFIX.SERVICE, {
+      idColumn: 'ServiceID', padding: 4
+    });
+    const repairedCount = employees.repairedCount + services.repairedCount;
+
+    AppLogger.safe('AUDIT', 'Catalog', 'REPAIR_DUPLICATE_IDS', '', 'REPAIR duplicate catalog IDs', {
+      employees: employees.repairedCount,
+      services: services.repairedCount
+    });
+
+    return { repairedCount: repairedCount, employees: employees, services: services };
+  }
+
   static setStatus(sheetName, idColumn, id, moduleName) {
     this.initialize();
     const saved = Database.update(sheetName, Validator.required(id, 'Mã'), {
@@ -84,3 +103,4 @@ function createEmployee(token, data) { AuthService.requireSession(token, [CONFIG
 function createService(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.createService(data)); }
 function archiveEmployee(token, employeeId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.archiveEmployee(employeeId)); }
 function archiveService(token, serviceId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.archiveService(serviceId)); }
+function repairDuplicateCatalogIds(token) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]); return Utils.toClient(CatalogService.repairDuplicateIds()); }

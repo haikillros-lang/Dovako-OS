@@ -24,6 +24,16 @@
   }
   function archiveEmployeeUi(id) { if (confirm('Lưu trữ nhân viên này?')) apiCall('archiveEmployee', [id], loadSettings, handleSettingsError); }
   function archiveServiceUi(id) { if (confirm('Lưu trữ dịch vụ này?')) apiCall('archiveService', [id], loadSettings, handleSettingsError); }
+  function repairCatalogIdsUi() {
+    const message = 'Giữ nguyên mã ở dòng đầu tiên của mỗi nhóm. Các dòng trùng sau sẽ được cấp mã mới; lịch booking hiện có vẫn giữ liên kết cũ. Tiếp tục?';
+    if (!confirm(message)) return;
+    apiCall('repairDuplicateCatalogIds', [], function (result) {
+      const employees = result.employees ? result.employees.repairedCount : 0;
+      const services = result.services ? result.services.repairedCount : 0;
+      app.toast('Đã sửa ' + employees + ' mã nhân viên và ' + services + ' mã dịch vụ.');
+      loadSettings();
+    }, handleSettingsError);
+  }
   function deactivateUserUi(id) { if (confirm('Khóa tài khoản này?')) apiCall('deactivateUser', [id], loadSettings, handleSettingsError); }
   function handleSettingsError(error) { app.toast(error && error.message ? error.message : 'Không thể cập nhật cài đặt.', 'error'); }
   document.addEventListener('DOMContentLoaded', function () {

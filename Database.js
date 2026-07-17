@@ -342,6 +342,74 @@ class Database {
     }
   }
 
+  /**
+   * Repairs blank or repeated IDs in a reference table without deleting data.
+   * The first record using a duplicated ID keeps that ID so existing booking
+   * references continue to point to the same record. Every later duplicate
+   * receives the next available sequential ID.
+   */
+  static repairDuplicateIds(sheetName, prefix, options) {
+    const settings = options || {};
+    const headers = this.headers(sheetName);
+    const idColumn = settings.idColumn || headers[0];
+    const padding = settings.padding || 6;
+    const idIndex = headers.indexOf(idColumn);
+
+    if (idIndex === -1) {
+      throw new Error('Không tìm thấy cột mã ' + idColumn + ' trong sheet ' + sheetName + '.');
+    }
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(settings.lockTimeoutMs || 30000);
+
+    try {
+      const sheet = this.table(sheetName);
+      const lastRow = sheet.getLastRow();
+      if (lastRow < 2) {
+        return { sheetName: sheetName, repairedCount: 0, repairs: [] };
+      }
+
+      const rows = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+      const pattern = new RegExp('^' + this.escapeRegExp(prefix) + '(\\d+)$');
+      let highest = 0;
+      const used = {};
+      const repairs = [];
+
+      rows.forEach(function (row) {
+        const value = String(row[idIndex] || '').trim();
+        const match = value.match(pattern);
+        if (match) highest = Math.max(highest, Number(match[1]));
+      });
+
+      rows.forEach(function (row, index) {
+        const currentId = String(row[idIndex] || '').trim();
+        if (currentId && !used[currentId]) {
+          used[currentId] = true;
+          return;
+        }
+
+        let nextId;
+        do {
+          highest += 1;
+          nextId = prefix + String(highest).padStart(padding, '0');
+        } while (used[nextId]);
+
+        row[idIndex] = nextId;
+        used[nextId] = true;
+        repairs.push({ rowNumber: index + 2, oldId: currentId, newId: nextId });
+      });
+
+      if (repairs.length) {
+        sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+        SpreadsheetApp.flush();
+      }
+
+      return { sheetName: sheetName, repairedCount: repairs.length, repairs: repairs };
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   static assertColumn(sheetName, columnName) {
     if (this.headers(sheetName).indexOf(columnName) === -1) {
       throw new Error('Không tìm thấy cột ' + columnName + ' trong sheet ' + sheetName + '.');
