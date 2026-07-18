@@ -1,5 +1,7 @@
 /** DOVAKO OS file storage for handwritten assessments and customer photos. */
 class DriveService {
+  static get ROOT_FOLDER_CACHE_KEY() { return 'DOVAKO_FILES_ROOT_FOLDER_ID'; }
+
   static get FILE_HEADERS() {
     return ['FileID', 'CustomerID', 'BookingID', 'FileType', 'FileName', 'DriveFileID', 'UploadDate'];
   }
@@ -10,8 +12,15 @@ class DriveService {
 
   static rootFolder() {
     const rootName = CONFIG.DRIVE && CONFIG.DRIVE.ROOT_FOLDER_NAME ? CONFIG.DRIVE.ROOT_FOLDER_NAME : 'DOVAKO OS FILES';
+    const cache = CacheService.getScriptCache();
+    const cachedId = cache.get(this.ROOT_FOLDER_CACHE_KEY);
+    if (cachedId) {
+      try { return DriveApp.getFolderById(cachedId); } catch (error) { cache.remove(this.ROOT_FOLDER_CACHE_KEY); }
+    }
     const folders = DriveApp.getFoldersByName(rootName);
-    return folders.hasNext() ? folders.next() : DriveApp.createFolder(rootName);
+    const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(rootName);
+    cache.put(this.ROOT_FOLDER_CACHE_KEY, folder.getId(), 21600);
+    return folder;
   }
 
   static customerFolder(customerId) {
@@ -25,8 +34,9 @@ class DriveService {
     return Database.where(CONFIG.SHEETS.FILES, { CustomerID: Validator.required(customerId, 'Mã khách hàng') })
       .sort(function (left, right) { return new Date(right.UploadDate).getTime() - new Date(left.UploadDate).getTime(); })
       .map(function (item) {
-        let url = '';
-        try { url = DriveApp.getFileById(item.DriveFileID).getUrl(); } catch (error) { url = ''; }
+        const url = item.DriveFileID
+          ? 'https://drive.google.com/open?id=' + encodeURIComponent(item.DriveFileID)
+          : '';
         return Object.assign({}, item, { Url: url });
       });
   }

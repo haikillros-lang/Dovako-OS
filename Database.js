@@ -6,17 +6,36 @@
  * class instead of calling SpreadsheetApp directly.
  */
 class Database {
+  static get SPREADSHEET_CACHE_KEY() { return 'DOVAKO_DATABASE_SPREADSHEET_ID'; }
+
   /**
    * Returns the spreadsheet bound to this Apps Script project.
    * The Utils integration keeps this compatible with the existing project.
    */
   static getSpreadsheet() {
+    if (this._spreadsheet) return this._spreadsheet;
+
     const active = SpreadsheetApp.getActiveSpreadsheet();
-    if (active) return active;
+    if (active) {
+      this._spreadsheet = active;
+      return active;
+    }
 
     const databaseConfig = typeof CONFIG !== 'undefined' ? CONFIG.DATABASE : null;
-    if (databaseConfig && databaseConfig.SPREADSHEET_ID) {
-      return SpreadsheetApp.openById(databaseConfig.SPREADSHEET_ID);
+    const cache = CacheService.getScriptCache();
+    const configuredId = databaseConfig && databaseConfig.SPREADSHEET_ID;
+    const cachedId = configuredId ? '' : cache.get(this.SPREADSHEET_CACHE_KEY);
+    const spreadsheetId = configuredId || cachedId;
+
+    if (spreadsheetId) {
+      try {
+        const spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+        this._spreadsheet = spreadsheet;
+        if (!configuredId) cache.put(this.SPREADSHEET_CACHE_KEY, spreadsheet.getId(), 21600);
+        return spreadsheet;
+      } catch (error) {
+        if (!configuredId) cache.remove(this.SPREADSHEET_CACHE_KEY);
+      }
     }
 
     const names = databaseConfig && Array.isArray(databaseConfig.SPREADSHEET_NAMES)
@@ -25,13 +44,20 @@ class Database {
     for (let index = 0; index < names.length; index += 1) {
       const files = DriveApp.getFilesByName(names[index]);
       if (files.hasNext()) {
-        return SpreadsheetApp.open(files.next());
+        const spreadsheet = SpreadsheetApp.open(files.next());
+        this._spreadsheet = spreadsheet;
+        cache.put(this.SPREADSHEET_CACHE_KEY, spreadsheet.getId(), 21600);
+        return spreadsheet;
       }
     }
 
     if (typeof Utils !== 'undefined' && typeof Utils.getSpreadsheet === 'function') {
       const spreadsheet = Utils.getSpreadsheet();
-      if (spreadsheet) return spreadsheet;
+      if (spreadsheet) {
+        this._spreadsheet = spreadsheet;
+        cache.put(this.SPREADSHEET_CACHE_KEY, spreadsheet.getId(), 21600);
+        return spreadsheet;
+      }
     }
 
     throw new Error(

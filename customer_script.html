@@ -135,8 +135,9 @@
       if (!file) { app.toast('Hãy chọn file cần tải lên.', 'error'); return; }
       if (file.size > 5 * 1024 * 1024) { app.toast('File tối đa 5 MB.', 'error'); return; }
       button.disabled = true;
-      button.textContent = 'Đang tải...';
+      button.textContent = 'Đang đọc file...';
       readCustomerFile(file).then(function (base64) {
+        button.textContent = 'Đang lưu vào Google Drive...';
         apiCall('uploadCustomerFile', [{ CustomerID: customerUi.editingId, FileType: document.getElementById('customerFileType').value, FileName: file.name, MimeType: file.type || 'application/octet-stream', Base64: base64 }], function () {
           app.toast('Đã tải file lên hồ sơ khách.');
           input.value = '';
