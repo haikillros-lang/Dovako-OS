@@ -18,7 +18,7 @@ class PrepaidService {
       'PaidAmount', 'Status', 'Note', 'CreatedDate', 'UpdatedDate',
       'CardMode', 'PlanID', 'PlanName', 'FaceValue', 'BonusServiceID',
       'BonusServiceName', 'BonusUnitPrice', 'BonusValue', 'UsedValue',
-      'RemainingValue'
+      'RemainingValue', 'DiscountMode'
     ];
   }
 
@@ -32,7 +32,8 @@ class PrepaidService {
   static get PLAN_HEADERS() {
     return [
       'PlanID', 'PlanName', 'FaceValue', 'DiscountPercent', 'BonusSessions',
-      'BonusServiceID', 'BonusServiceName', 'Status', 'CreatedDate', 'UpdatedDate'
+      'BonusServiceID', 'BonusServiceName', 'Status', 'CreatedDate', 'UpdatedDate',
+      'DiscountMode'
     ];
   }
 
@@ -40,7 +41,7 @@ class PrepaidService {
   static initialize() {
     Database.ensureColumns(this.CARD_TABLE, this.CARD_HEADERS);
     Database.ensureColumns(this.USAGE_TABLE, this.USAGE_HEADERS);
-    Database.ensureTable(this.PLAN_TABLE, this.PLAN_HEADERS);
+    Database.ensureColumns(this.PLAN_TABLE, this.PLAN_HEADERS);
   }
 
   static options() {
@@ -123,6 +124,11 @@ class PrepaidService {
       PlanName: Validator.text(data.PlanName === undefined ? (current ? current.PlanName : '') : data.PlanName, 'Tên mệnh giá', { required: true, maxLength: 120 }),
       FaceValue: Validator.number(data.FaceValue === undefined ? (current ? current.FaceValue : '') : data.FaceValue, 'Mệnh giá', { required: true, min: 1 }),
       DiscountPercent: Validator.number(data.DiscountPercent === undefined ? (current ? current.DiscountPercent : '') : data.DiscountPercent, 'Chiết khấu', { required: true, min: 0, max: 100 }),
+      // Existing plans preserve the previous discount-at-sale behaviour.
+      // Newly created plans default to applying the discount per booking.
+      DiscountMode: this.normalizeDiscountMode(data.DiscountMode === undefined
+        ? (current ? (current.DiscountMode || 'Upfront') : 'PerSession')
+        : data.DiscountMode),
       BonusSessions: bonusSessions,
       BonusServiceID: bonusService ? bonusService.ServiceID : '',
       BonusServiceName: bonusService ? bonusService.ServiceName : '',
@@ -194,7 +200,10 @@ class PrepaidService {
 
     const faceValue = Number(plan.FaceValue || 0);
     const discountPercent = Number(plan.DiscountPercent || 0);
-    const discountAmount = Math.round(faceValue * discountPercent / 100);
+    const discountMode = this.normalizeDiscountMode(plan.DiscountMode || 'Upfront');
+    // A card receives a discount once only: at purchase, or on every booking.
+    const discountAmount = discountMode === 'Upfront'
+      ? Math.round(faceValue * discountPercent / 100) : 0;
     const paidAmount = Math.max(0, faceValue - discountAmount);
     const bonusUnitPrice = bonusService ? Number(bonusService.Price || 0) : 0;
     const bonusValue = bonusUnitPrice * bonusSessions;
@@ -231,7 +240,8 @@ class PrepaidService {
       BonusUnitPrice: bonusUnitPrice,
       BonusValue: bonusValue,
       UsedValue: 0,
-      RemainingValue: remainingValue
+      RemainingValue: remainingValue,
+      DiscountMode: discountMode
     }, { idColumn: 'CardID', padding: 6 });
 
     AppLogger.safe('AUDIT', 'PrepaidCard', 'CREATE_VALUE', saved.CardID, 'CREATE prepaid value card', {
@@ -239,7 +249,8 @@ class PrepaidService {
       planId: plan.PlanID,
       faceValue: faceValue,
       paidAmount: paidAmount,
-      remainingValue: remainingValue
+      remainingValue: remainingValue,
+      discountMode: discountMode
     });
     return saved;
   }
@@ -319,10 +330,44 @@ class PrepaidService {
       .sort(this.sortOldestFirst);
   }
 
+  /**
+   * Value cards usable for a booking. Per-session cards include a calculated
+   * discount and are only returned when their balance covers the net amount.
+   */
+  static availableValueForBooking(customerId, amount) {
+    const price = Number(amount || 0);
+    if (!Number.isFinite(price) || price <= 0) return [];
+    return this.list({ customerId: customerId, includeInactive: false })
+      .filter(function (card) {
+        return PrepaidService.isValueCard(card) && card.Status !== 'Exhausted';
+      })
+      .map(function (card) {
+        return Object.assign({}, card, PrepaidService.quoteForValueCard(card, price));
+      })
+      .filter(function (card) {
+        return Number(card.RemainingValue || 0) >= Number(card.ChargeAmount || 0);
+      })
+      .sort(this.sortOldestFirst);
+  }
+
+  /** Returns the oldest eligible value card and its booking discount. */
+  static quoteForBooking(customerId, serviceId, amount) {
+    const card = this.availableValueForBooking(customerId, amount)[0];
+    if (!card) return null;
+    return {
+      CardID: card.CardID,
+      ServiceID: serviceId,
+      DiscountMode: card.DiscountMode,
+      DiscountPercent: Number(card.DiscountPercent || 0),
+      DiscountAmount: Number(card.SuggestedDiscount || 0),
+      ChargeAmount: Number(card.ChargeAmount || amount)
+    };
+  }
+
   /** Cards currently usable for a booking. Session cards are preferred. */
   static availableForBooking(customerId, serviceId, amount) {
     return this.availableSessions(customerId, serviceId)
-      .concat(this.availableValue(customerId, amount));
+      .concat(this.availableValueForBooking(customerId, amount));
   }
 
   static warnings() {
@@ -435,6 +480,22 @@ class PrepaidService {
   }
 
   static isSessionCard(card) { return !this.isValueCard(card); }
+
+  static normalizeDiscountMode(value) {
+    return Validator.oneOf(value || 'Upfront', ['PerSession', 'Upfront'], 'Cách áp dụng chiết khấu', { required: true });
+  }
+
+  static quoteForValueCard(card, amount) {
+    const price = Number(amount || 0);
+    const perSession = String(card.DiscountMode || 'Upfront') === 'PerSession';
+    const percent = Math.max(0, Number(card.DiscountPercent || 0));
+    const discount = perSession ? Math.round(price * percent / 100) : 0;
+    return {
+      DiscountMode: perSession ? 'PerSession' : 'Upfront',
+      SuggestedDiscount: discount,
+      ChargeAmount: Math.max(0, price - discount)
+    };
+  }
 
   static isNearEnd(card) {
     if (this.isValueCard(card)) {

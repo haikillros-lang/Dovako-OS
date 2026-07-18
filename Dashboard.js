@@ -12,6 +12,8 @@ class DashboardService {
     const todayBookings = BookingService.list({ date: date, includeCancelled: true });
     const allBookings = BookingService.list({ includeCancelled: true });
     const customers = CustomerService.list({ includeInactive: true });
+    const customerSpending = CustomerService.spendingByCustomer();
+    const vipThreshold = CustomerService.vipSpendThreshold();
     const prepaidCards = typeof PrepaidService !== 'undefined'
       ? PrepaidService.list({ includeInactive: true }) : [];
     const prepaidWarnings = typeof PrepaidService !== 'undefined'
@@ -40,7 +42,11 @@ class DashboardService {
         newToday: customers.filter(function (customer) {
           return DashboardService.dateKey(customer.CreatedDate) === todayKey;
         }).length,
-        total: customers.length
+        total: customers.length,
+        vip: customers.filter(function (customer) {
+          const stats = customerSpending[customer.CustomerID] || {};
+          return Number(stats.prepaidSpend || 0) + Number(stats.bookingSpend || 0) >= vipThreshold;
+        }).length
       },
       prepaid: {
         activeCards: prepaidCards.filter(function (card) {

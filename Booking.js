@@ -186,6 +186,7 @@ class BookingService {
     const core = Validator.booking(Object.assign({}, data, {
       Status: CONFIG.BOOKING_STATUS.PENDING_CONFIRMATION
     }));
+    this.applyPrepaidDiscount(core);
     this.assertPrice(core);
     const now = new Date();
     return Object.assign(core, { CreatedDate: now, UpdatedDate: now });
@@ -260,6 +261,26 @@ class BookingService {
     if (Math.abs(booking.FinalPrice - expected) > 0.009) {
       throw new Error('Thành tiền phải bằng giá dịch vụ trừ giảm giá.');
     }
+  }
+
+  /**
+   * Applies a value-card's per-session benefit when a booking is created.
+   * A manually entered larger discount is preserved. Legacy cards and plans
+   * discounted at purchase do not receive a second discount.
+   */
+  static applyPrepaidDiscount(booking) {
+    if (typeof PrepaidService === 'undefined') return booking;
+    // A complimentary legacy session takes priority and is free at completion;
+    // do not also attach a value-card discount to the same booking.
+    if (PrepaidService.availableSessions(booking.CustomerID, booking.ServiceID).length) return booking;
+    const quote = PrepaidService.quoteForBooking(booking.CustomerID, booking.ServiceID, booking.Price);
+    if (!quote || String(quote.DiscountMode) !== 'PerSession') return booking;
+
+    const automaticDiscount = Number(quote.DiscountAmount || 0);
+    if (automaticDiscount <= 0) return booking;
+    booking.Discount = Math.max(Number(booking.Discount || 0), automaticDiscount);
+    booking.FinalPrice = Number((Number(booking.Price || 0) - booking.Discount).toFixed(2));
+    return booking;
   }
 
   static isUnavailableStatus(status) {

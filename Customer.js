@@ -102,6 +102,61 @@ class CustomerService {
     return this.list(Object.assign({}, options || {}, { query: query }));
   }
 
+  /**
+   * Derived customer information for operations and CRM. The lifecycle Status
+   * is deliberately not overwritten: a Blacklist/Inactive customer remains
+   * protected even when their accumulated spending qualifies for VIP.
+   */
+  static insights(options) {
+    const customers = this.list(options);
+    const spending = this.spendingByCustomer();
+    const vipThreshold = this.vipSpendThreshold();
+    return customers.map(function (customer) {
+      const stats = spending[customer.CustomerID] || { prepaidSpend: 0, bookingSpend: 0, cardCount: 0 };
+      const totalSpend = Number(stats.prepaidSpend || 0) + Number(stats.bookingSpend || 0);
+      return Object.assign({}, customer, {
+        CustomerType: stats.cardCount > 0 ? 'Khách thẻ' : 'Khách lẻ',
+        PrepaidCardCount: Number(stats.cardCount || 0),
+        PrepaidSpend: Number(stats.prepaidSpend || 0),
+        BookingSpend: Number(stats.bookingSpend || 0),
+        TotalSpend: totalSpend,
+        CustomerTier: totalSpend >= vipThreshold ? 'VIP' : 'Thường',
+        VipThreshold: vipThreshold
+      });
+    });
+  }
+
+  /** Calculates actual money paid: card purchase plus completed cash bookings. */
+  static spendingByCustomer() {
+    const totals = {};
+    const ensure = function (customerId) {
+      if (!totals[customerId]) totals[customerId] = { prepaidSpend: 0, bookingSpend: 0, cardCount: 0 };
+      return totals[customerId];
+    };
+
+    if (typeof PrepaidService !== 'undefined') {
+      PrepaidService.list({ includeInactive: true }).forEach(function (card) {
+        const stats = ensure(card.CustomerID);
+        stats.prepaidSpend += Math.max(0, Number(card.PaidAmount || 0));
+        stats.cardCount += 1;
+      });
+    }
+    if (typeof BookingService !== 'undefined') {
+      BookingService.list({ includeCancelled: true }).forEach(function (booking) {
+        if (booking.Status !== CONFIG.BOOKING_STATUS.COMPLETED) return;
+        const stats = ensure(booking.CustomerID);
+        // Prepaid bookings are set to zero after card consumption, preventing
+        // a card purchase from being counted twice.
+        stats.bookingSpend += Math.max(0, Number(booking.FinalPrice || 0));
+      });
+    }
+    return totals;
+  }
+
+  static vipSpendThreshold() {
+    return Number((CONFIG.CUSTOMER_VIP && CONFIG.CUSTOMER_VIP.SPEND_THRESHOLD) || 10000000);
+  }
+
   static normalizeForCreate(input) {
     const data = input || {};
     const now = new Date();
@@ -177,6 +232,7 @@ class CustomerService {
 /* Apps Script entry points for google.script.run and manual administration. */
 function initializeCustomerModule() { return CustomerService.initialize(); }
 function getCustomers(token, options) { AuthService.requireSession(token); return Utils.toClient(CustomerService.list(options)); }
+function getCustomerInsights(token, options) { AuthService.requireSession(token); return Utils.toClient(CustomerService.insights(options)); }
 function getCustomer(token, customerId) { AuthService.requireSession(token); return Utils.toClient(CustomerService.get(customerId)); }
 function searchCustomers(token, query, options) { AuthService.requireSession(token); return Utils.toClient(CustomerService.search(query, options)); }
 function createCustomer(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(CustomerService.create(data)); }

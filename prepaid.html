@@ -25,6 +25,7 @@
     <input name="PlanName" required placeholder="Tên mệnh giá, ví dụ Thẻ 5 triệu">
     <input name="FaceValue" type="number" min="1" required placeholder="Mệnh giá">
     <input name="DiscountPercent" type="number" min="0" max="100" required placeholder="Chiết khấu %">
+    <select name="DiscountMode" aria-label="Cách áp dụng chiết khấu"><option value="PerSession">Giảm mỗi buổi</option><option value="Upfront">Giảm khi mua thẻ</option></select>
     <input name="BonusSessions" type="number" min="0" max="100" value="1" required placeholder="Buổi tặng">
     <select id="prepaidPlanBonusService" name="BonusServiceID"><option value="">Không có dịch vụ tặng</option></select>
     <button id="savePrepaidPlanButton" class="button primary">Thêm mệnh giá</button>

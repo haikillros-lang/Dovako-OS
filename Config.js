@@ -129,6 +129,18 @@ const CONFIG = Object.freeze({
   },
 
   //==========================
+  // CUSTOMER INSIGHTS
+  //==========================
+
+  CUSTOMER_VIP: {
+
+    // A customer automatically receives the VIP tier once total spending
+    // (prepaid purchases + completed non-card bookings) reaches this amount.
+    SPEND_THRESHOLD: 10000000
+
+  },
+
+  //==========================
   // USER ROLE
   //==========================
 

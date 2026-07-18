@@ -111,7 +111,7 @@
             ['Doanh thu tuần', this.currency(revenue.week), 'Từ thứ Hai đến Chủ nhật'],
             ['Doanh thu tháng', this.currency(revenue.month), 'Tháng hiện tại'],
             ['Booking hôm nay', booking.activeToday || 0, (booking.pendingConfirmation || 0) + ' lịch chưa xác nhận'],
-            ['Khách mới hôm nay', customers.newToday || 0, 'Tổng hồ sơ: ' + (customers.total || 0)],
+            ['Khách mới hôm nay', customers.newToday || 0, 'Tổng hồ sơ: ' + (customers.total || 0) + ' · VIP: ' + (customers.vip || 0)],
             ['Đang phục vụ', booking.serving || 0, 'Đã hoàn thành: ' + (booking.completed || 0)],
             ['Thẻ sắp hết', (prepaid.nearEnd || []).length, 'Đang dùng: ' + (prepaid.activeCards || 0) + ' thẻ']
           ];

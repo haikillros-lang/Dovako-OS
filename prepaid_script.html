@@ -20,7 +20,8 @@
     const plan = document.getElementById('prepaidPlan');
     const currentPlan = plan.value;
     plan.innerHTML = '<option value="">Chọn mệnh giá</option>' + (prepaidUi.options.plans || []).map(function (item) {
-      return '<option value="' + app.escape(item.PlanID) + '">' + app.escape(item.PlanName) + ' · ' + app.currency(item.FaceValue) + ' · giảm ' + app.escape(item.DiscountPercent) + '%</option>';
+      const mode = item.DiscountMode === 'PerSession' ? 'giảm mỗi buổi' : 'giảm khi mua';
+      return '<option value="' + app.escape(item.PlanID) + '">' + app.escape(item.PlanName) + ' · ' + app.currency(item.FaceValue) + ' · giảm ' + app.escape(item.DiscountPercent) + '% (' + mode + ')</option>';
     }).join('');
     plan.value = currentPlan;
 
@@ -67,14 +68,18 @@
 
     const faceValue = Number(plan.FaceValue || 0);
     const discount = Number(plan.DiscountPercent || 0);
-    const discountAmount = Math.round(faceValue * discount / 100);
+    const perSession = plan.DiscountMode === 'PerSession';
+    const discountAmount = perSession ? 0 : Math.round(faceValue * discount / 100);
     const paidAmount = Math.max(0, faceValue - discountAmount);
     const bonusValue = bonusService ? Number(bonusService.Price || 0) * bonusSessions : 0;
     const totalBalance = faceValue + bonusValue;
     const bonusText = bonusSessions > 0
       ? ' · tặng ' + bonusSessions + ' buổi ' + (bonusService ? bonusService.ServiceName : '(chưa chọn dịch vụ)') + ' trị giá ' + app.currency(bonusValue)
       : '';
-    summary.textContent = 'Mệnh giá ' + app.currency(faceValue) + ' · chiết khấu ' + discount + '%: giảm ' + app.currency(discountAmount) + ' · khách thanh toán ' + app.currency(paidAmount) + bonusText + ' · số dư ban đầu ' + app.currency(totalBalance) + '.';
+    const discountText = perSession
+      ? 'giảm ' + discount + '% trên mỗi booking đủ điều kiện; khách nạp ' + app.currency(paidAmount)
+      : 'chiết khấu ' + discount + '%: giảm ' + app.currency(discountAmount) + ' · khách thanh toán ' + app.currency(paidAmount);
+    summary.textContent = 'Mệnh giá ' + app.currency(faceValue) + ' · ' + discountText + bonusText + ' · số dư ban đầu ' + app.currency(totalBalance) + '.';
   }
 
   function searchPrepaidCustomers() {
@@ -136,8 +141,11 @@
       const stateClass = card.Status === 'Exhausted' ? 'inactive' : card.Status === 'NearEnd' ? 'danger' : '';
       const canEditBonus = authUi.user && (authUi.user.Role === 'Admin' || authUi.user.Role === 'Reception');
       const action = canEditBonus ? '<button class="icon-button" onclick="updatePrepaidBonusUi(\'' + app.escape(card.CardID) + '\',' + Number(card.BonusSessions || 0) + ')">Cập nhật tặng</button>' : '';
+      const discountLabel = card.DiscountMode === 'PerSession'
+        ? 'giảm ' + app.escape(card.DiscountPercent) + '% mỗi buổi'
+        : 'đã giảm lúc mua ' + app.escape(card.DiscountPercent) + '%';
       const details = isValue
-        ? 'Mệnh giá ' + app.currency(card.FaceValue) + ' · giảm ' + app.escape(card.DiscountPercent) + '% · số dư ' + app.currency(remaining) + ' · đã thanh toán ' + app.currency(card.PaidAmount)
+        ? 'Mệnh giá ' + app.currency(card.FaceValue) + ' · ' + discountLabel + ' · số dư ' + app.currency(remaining) + ' · đã thanh toán ' + app.currency(card.PaidAmount)
         : 'Mua ' + app.escape(card.PaidSessions) + ' + tặng ' + app.escape(card.BonusSessions) + ' buổi · còn ' + remaining + '/' + app.escape(card.TotalSessions) + ' buổi · đã thanh toán ' + app.currency(card.PaidAmount);
       return '<div class="catalog-item"><div><strong>' + app.escape(card.CustomerName || card.CustomerID) + ' · ' + app.escape(isValue ? (card.PlanName || 'Thẻ mệnh giá') : (card.ServiceName || card.ServiceID)) + '</strong><small>' + app.escape(card.CardID) + ' · ' + details + '</small></div><div>' + action + '<span class="status-chip ' + stateClass + '">' + state + '</span></div></div>';
     }).join('') : '<div class="empty-state">Chưa có thẻ phù hợp.</div>';
@@ -160,7 +168,8 @@
     if (!list) return;
     list.innerHTML = plans && plans.length ? plans.map(function (plan) {
       const service = plan.BonusServiceName ? ' · tặng ' + plan.BonusSessions + ' buổi ' + plan.BonusServiceName : '';
-      return '<div class="catalog-item"><div><strong>' + app.escape(plan.PlanName) + ' · ' + app.currency(plan.FaceValue) + '</strong><small>' + app.escape(plan.PlanID) + ' · giảm ' + app.escape(plan.DiscountPercent) + '%' + app.escape(service) + '</small></div><div><button class="icon-button" type="button" onclick="editPrepaidPlanUi(\'' + app.escape(plan.PlanID) + '\')">Sửa</button><button class="icon-button danger" type="button" onclick="archivePrepaidPlanUi(\'' + app.escape(plan.PlanID) + '\')">Lưu trữ</button></div></div>';
+      const discountMode = plan.DiscountMode === 'PerSession' ? 'giảm mỗi buổi' : 'giảm khi mua';
+      return '<div class="catalog-item"><div><strong>' + app.escape(plan.PlanName) + ' · ' + app.currency(plan.FaceValue) + '</strong><small>' + app.escape(plan.PlanID) + ' · giảm ' + app.escape(plan.DiscountPercent) + '% (' + discountMode + ')' + app.escape(service) + '</small></div><div><button class="icon-button" type="button" onclick="editPrepaidPlanUi(\'' + app.escape(plan.PlanID) + '\')">Sửa</button><button class="icon-button danger" type="button" onclick="archivePrepaidPlanUi(\'' + app.escape(plan.PlanID) + '\')">Lưu trữ</button></div></div>';
     }).join('') : '<div class="empty-state">Chưa có mệnh giá. Hãy tạo mệnh giá đầu tiên.</div>';
   }
 
@@ -172,6 +181,7 @@
     form.elements.PlanName.value = plan.PlanName || '';
     form.elements.FaceValue.value = Number(plan.FaceValue || 0);
     form.elements.DiscountPercent.value = Number(plan.DiscountPercent || 0);
+    form.elements.DiscountMode.value = plan.DiscountMode || 'Upfront';
     form.elements.BonusSessions.value = Number(plan.BonusSessions || 0);
     form.elements.BonusServiceID.value = plan.BonusServiceID || '';
     document.getElementById('savePrepaidPlanButton').textContent = 'Lưu mệnh giá';
@@ -183,6 +193,7 @@
     prepaidUi.editingPlanId = null;
     const form = document.getElementById('prepaidPlanForm');
     form.reset();
+    form.elements.DiscountMode.value = 'PerSession';
     form.elements.BonusSessions.value = prepaidUi.options.bonusSessions || 1;
     document.getElementById('savePrepaidPlanButton').textContent = 'Thêm mệnh giá';
     document.getElementById('cancelPrepaidPlanEditButton').classList.add('hidden');
