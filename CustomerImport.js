@@ -179,3 +179,16 @@ class CustomerImportService {
 /** Preview first, then run importLegacyCustomers once in Apps Script. */
 function previewLegacyCustomerImport() { return CustomerImportService.preview(); }
 function importLegacyCustomers() { return CustomerImportService.importAll(); }
+
+function getLegacyCustomerImportPreview(token) {
+  AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);
+  return Utils.toClient(CustomerImportService.preview());
+}
+
+function importLegacyCustomersForAdmin(token, confirmationPhrase) {
+  AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);
+  if (String(confirmationPhrase || '').trim() !== 'NHAP KHACH CU') {
+    throw new Error('Nhập đúng cụm NHAP KHACH CU để xác nhận nhập dữ liệu.');
+  }
+  return Utils.toClient(CustomerImportService.importAll());
+}
