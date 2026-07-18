@@ -16,7 +16,16 @@ class BookingService {
 
   static initialize() {
     Database.ensureTable(this.TABLE, this.HEADERS);
+    this.ensureVietnamTimezone();
     return { sheet: this.TABLE, headers: this.HEADERS.slice() };
+  }
+
+  /** Keeps the shared Google Sheet on the application's Vietnam time zone. */
+  static ensureVietnamTimezone() {
+    const spreadsheet = Database.getSpreadsheet();
+    if (spreadsheet.getSpreadsheetTimeZone() !== CONFIG.TIMEZONE) {
+      spreadsheet.setSpreadsheetTimeZone(CONFIG.TIMEZONE);
+    }
   }
 
   static list(options) {
