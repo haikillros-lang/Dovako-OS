@@ -13,7 +13,12 @@
   }
   function renderReport(report) {
     const summary = report.summary || {};
-    const cards = [['Doanh thu', app.currency(summary.revenue), report.from + ' – ' + report.to], ['Booking hoàn thành', summary.completedBookings || 0, 'Trên ' + (summary.totalBookings || 0) + ' booking'], ['Hủy / không đến', summary.cancelledBookings || 0, 'Trong khoảng đã chọn']];
+    const cards = [
+      ['Doanh thu', app.currency(summary.revenue), report.from + ' – ' + report.to],
+      ['Doanh thu thẻ', app.currency(summary.prepaidRevenue), (summary.prepaidCards || 0) + ' thẻ đã bán'],
+      ['Booking hoàn thành', summary.completedBookings || 0, 'Trên ' + (summary.totalBookings || 0) + ' booking'],
+      ['Hủy / không đến', summary.cancelledBookings || 0, 'Trong khoảng đã chọn']
+    ];
     document.getElementById('reportSummary').innerHTML = cards.map(function (card) { return '<article class="metric-card"><p>' + app.escape(card[0]) + '</p><strong>' + app.escape(card[1]) + '</strong><span>' + app.escape(card[2]) + '</span></article>'; }).join('');
     document.getElementById('reportServices').innerHTML = reportRows(report.byService, 'Chưa có booking hoàn thành.');
     document.getElementById('reportEmployees').innerHTML = reportRows(report.byEmployee, 'Chưa có booking hoàn thành.');

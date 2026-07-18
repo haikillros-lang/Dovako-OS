@@ -12,13 +12,17 @@ class DashboardService {
     const todayBookings = BookingService.list({ date: date, includeCancelled: true });
     const allBookings = BookingService.list({ includeCancelled: true });
     const customers = CustomerService.list({ includeInactive: true });
+    const prepaidCards = typeof PrepaidService !== 'undefined'
+      ? PrepaidService.list({ includeInactive: true }) : [];
+    const prepaidWarnings = typeof PrepaidService !== 'undefined'
+      ? PrepaidService.warnings() : [];
 
     return {
       date: todayKey,
       revenue: {
-        today: this.revenueBetween(allBookings, todayKey, todayKey),
-        week: this.revenueBetween(allBookings, week.from, week.to),
-        month: this.revenueBetween(allBookings, month.from, month.to)
+        today: this.totalRevenueBetween(allBookings, prepaidCards, todayKey, todayKey),
+        week: this.totalRevenueBetween(allBookings, prepaidCards, week.from, week.to),
+        month: this.totalRevenueBetween(allBookings, prepaidCards, month.from, month.to)
       },
       bookings: {
         today: todayBookings.length,
@@ -38,6 +42,10 @@ class DashboardService {
         }).length,
         total: customers.length
       },
+      prepaid: {
+        activeCards: prepaidCards.filter(function (card) { return Number(card.RemainingSessions || 0) > 0 && card.Status !== 'Inactive'; }).length,
+        nearEnd: this.decoratePrepaidWarnings(prepaidWarnings, customers)
+      },
       todaySchedule: this.decorateSchedule(todayBookings, customers),
       period: { week: week, month: month }
     };
@@ -52,13 +60,15 @@ class DashboardService {
   static getRevenueSummary(referenceDate) {
     const date = referenceDate ? Validator.date(referenceDate, 'Ngày báo cáo', { required: true }) : new Date();
     const bookings = BookingService.list({ includeCancelled: true });
+    const prepaidCards = typeof PrepaidService !== 'undefined'
+      ? PrepaidService.list({ includeInactive: true }) : [];
     const todayKey = this.dateKey(date);
     const week = this.weekRange(date);
     const month = this.monthRange(date);
     return {
-      today: this.revenueBetween(bookings, todayKey, todayKey),
-      week: this.revenueBetween(bookings, week.from, week.to),
-      month: this.revenueBetween(bookings, month.from, month.to)
+      today: this.totalRevenueBetween(bookings, prepaidCards, todayKey, todayKey),
+      week: this.totalRevenueBetween(bookings, prepaidCards, week.from, week.to),
+      month: this.totalRevenueBetween(bookings, prepaidCards, month.from, month.to)
     };
   }
 
@@ -71,6 +81,15 @@ class DashboardService {
       const value = Number(booking.FinalPrice);
       return total + (Number.isFinite(value) ? value : 0);
     }, 0);
+  }
+
+  static totalRevenueBetween(bookings, prepaidCards, fromKey, toKey) {
+    const bookingRevenue = this.revenueBetween(bookings, fromKey, toKey);
+    const prepaidRevenue = (prepaidCards || []).reduce(function (total, card) {
+      const cardKey = DashboardService.dateKey(card.PurchasedDate);
+      return cardKey >= fromKey && cardKey <= toKey ? total + Number(card.PaidAmount || 0) : total;
+    }, 0);
+    return bookingRevenue + prepaidRevenue;
   }
 
   static decorateSchedule(bookings, customers) {
@@ -92,6 +111,22 @@ class DashboardService {
         Status: booking.Status,
         FinalPrice: booking.FinalPrice,
         Note: booking.Note
+      };
+    });
+  }
+
+  static decoratePrepaidWarnings(cards, customers) {
+    const names = customers.reduce(function (map, customer) {
+      map[customer.CustomerID] = customer.FullName;
+      return map;
+    }, {});
+    return cards.map(function (card) {
+      return {
+        CardID: card.CardID,
+        CustomerID: card.CustomerID,
+        CustomerName: names[card.CustomerID] || card.CustomerID,
+        ServiceName: card.ServiceName || card.ServiceID,
+        RemainingSessions: Number(card.RemainingSessions || 0)
       };
     });
   }

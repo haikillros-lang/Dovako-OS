@@ -7,13 +7,20 @@ class ReportService {
       return date >= period.from && date <= period.to;
     });
     const completed = bookings.filter(function (booking) { return booking.Status === CONFIG.BOOKING_STATUS.COMPLETED; });
+    const prepaidCards = typeof PrepaidService !== 'undefined'
+      ? PrepaidService.cardsBetween(period.from, period.to) : [];
+    const bookingRevenue = completed.reduce(function (total, booking) { return total + Number(booking.FinalPrice || 0); }, 0);
+    const prepaidRevenue = prepaidCards.reduce(function (total, card) { return total + Number(card.PaidAmount || 0); }, 0);
     const services = CatalogService.services(true).reduce(function (map, item) { map[item.ServiceID] = item.ServiceName; return map; }, {});
     const employees = CatalogService.employees(true).reduce(function (map, item) { map[item.EmployeeID] = item.FullName; return map; }, {});
     return {
       from: period.from,
       to: period.to,
       summary: {
-        revenue: completed.reduce(function (total, booking) { return total + Number(booking.FinalPrice || 0); }, 0),
+        revenue: bookingRevenue + prepaidRevenue,
+        bookingRevenue: bookingRevenue,
+        prepaidRevenue: prepaidRevenue,
+        prepaidCards: prepaidCards.length,
         completedBookings: completed.length,
         totalBookings: bookings.length,
         cancelledBookings: bookings.filter(function (booking) {

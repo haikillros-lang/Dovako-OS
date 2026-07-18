@@ -1,5 +1,5 @@
 <script>
-  const bookingUi = { options: { customers: [], employees: [], services: [], beds: [] }, availability: null, timer: null };
+  const bookingUi = { options: { customers: [], employees: [], services: [], beds: [] }, availability: null, prepaidCards: [], timer: null };
 
   function loadBookingScreen() {
     apiCall('getBookingOptions', [], function (options) {
@@ -38,6 +38,31 @@
     const date = document.getElementById('bookingFilterDate').value;
     document.getElementById('bookingList').innerHTML = '<div class="empty-state">Đang tải...</div>';
     apiCall('getBookings', [{ date: date, includeCancelled: true }], renderBookings, handleBookingError);
+  }
+
+  function loadBookingPrepaid() {
+    const customerId = document.getElementById('bookingCustomer').value;
+    const serviceId = document.getElementById('bookingService').value;
+    const notice = document.getElementById('bookingPrepaidNotice');
+    if (!customerId || !serviceId) {
+      bookingUi.prepaidCards = [];
+      notice.classList.add('hidden');
+      return;
+    }
+    notice.classList.remove('hidden');
+    notice.textContent = 'Đang kiểm tra thẻ trả trước...';
+    apiCall('getAvailablePrepaidCards', [customerId, serviceId], function (cards) {
+      bookingUi.prepaidCards = cards || [];
+      if (!bookingUi.prepaidCards.length) {
+        notice.classList.add('hidden');
+        return;
+      }
+      const card = bookingUi.prepaidCards[0];
+      notice.textContent = 'Khách có thẻ ' + card.CardID + ' còn ' + card.RemainingSessions + ' buổi. Khi booking hoàn thành, hệ thống sẽ tự trừ 1 buổi.';
+    }, function () {
+      bookingUi.prepaidCards = [];
+      notice.classList.add('hidden');
+    });
   }
 
   function selectedServiceDuration() {
@@ -125,7 +150,14 @@
     const call = action === 'confirm' ? 'confirmBooking' : action === 'checkin' ? 'checkInBooking' : action === 'complete' ? 'completeBooking' : 'cancelBooking';
     const note = action === 'cancel' ? window.prompt('Lý do hủy lịch (không bắt buộc):') : null;
     if (action === 'cancel' && note === null) return;
-    apiCall(call, action === 'cancel' ? [id, note] : [id], function () { app.toast('Đã cập nhật trạng thái booking.'); loadBookings(); loadBookingAvailability(); app.loadDashboard(); }, handleBookingError);
+    apiCall(call, action === 'cancel' ? [id, note] : [id], function (result) {
+      const prepaid = result && result.Prepaid;
+      const message = action === 'complete' && prepaid && prepaid.used
+        ? 'Đã hoàn thành và trừ thẻ ' + prepaid.cardId + (prepaid.remainingSessions === null ? '' : '. Còn ' + prepaid.remainingSessions + ' buổi.')
+        : 'Đã cập nhật trạng thái booking.';
+      app.toast(message);
+      loadBookings(); loadBookingAvailability(); app.loadDashboard();
+    }, handleBookingError);
   }
 
   function handleBookingError(error) { app.toast(error && error.message ? error.message : 'Không thể xử lý booking.', 'error'); }
@@ -139,7 +171,7 @@
   function bookingUseService() {
     const id = document.getElementById('bookingService').value;
     const service = (bookingUi.options.services || []).find(function (item) { return item.ServiceID === id; });
-    if (!service) return;
+    if (!service) { loadBookingPrepaid(); return; }
     document.getElementById('bookingPrice').value = Number(service.Price || 0);
     const start = document.getElementById('bookingStart').value;
     if (start && service.Duration) {
@@ -148,6 +180,7 @@
     }
     bookingRecalculate();
     loadBookingAvailability();
+    loadBookingPrepaid();
   }
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -159,10 +192,11 @@
       const data = Object.fromEntries(new FormData(event.currentTarget).entries());
       const button = document.getElementById('saveBookingButton'); button.disabled = true;
       apiCall('createBooking', [data], function () {
-        app.toast('Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; bookingRecalculate(); loadBookings(); loadBookingAvailability(); app.loadDashboard(); button.disabled = false;
+        app.toast('Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; document.getElementById('bookingPrepaidNotice').classList.add('hidden'); bookingRecalculate(); loadBookings(); loadBookingAvailability(); app.loadDashboard(); button.disabled = false;
       }, function (error) { button.disabled = false; handleBookingError(error); });
     });
     document.getElementById('bookingService').addEventListener('change', bookingUseService);
+    document.getElementById('bookingCustomer').addEventListener('change', loadBookingPrepaid);
     document.getElementById('bookingPrice').addEventListener('input', bookingRecalculate);
     document.getElementById('bookingDiscount').addEventListener('input', bookingRecalculate);
     document.getElementById('bookingFilterDate').addEventListener('change', loadBookings);

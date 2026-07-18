@@ -14,6 +14,7 @@
           <button class="nav-item active" data-view="dashboard" data-roles="Admin,Manager,Reception,Technician" onclick="app.navigate('dashboard')">Tổng quan</button>
           <button class="nav-item" data-view="customers" data-roles="Admin,Manager,Reception,Technician" onclick="app.navigate('customers')">Khách hàng</button>
           <button class="nav-item" data-view="bookings" data-roles="Admin,Manager,Reception,Technician" onclick="app.navigate('bookings')">Booking</button>
+          <button class="nav-item" data-view="prepaid" data-roles="Admin,Manager,Reception" onclick="app.navigate('prepaid')">Thẻ trả trước</button>
           <button class="nav-item" data-view="reports" data-roles="Admin,Manager" onclick="app.navigate('reports')">Báo cáo</button>
           <button class="nav-item" data-view="settings" data-roles="Admin,Manager" onclick="app.navigate('settings')">Cài đặt</button>
         </nav>
@@ -31,6 +32,7 @@
 
         <section id="view-dashboard" class="view active-view">
           <div id="dashboardCards" class="metric-grid" aria-live="polite"></div>
+          <div id="dashboardPrepaidAlerts" class="notice hidden"></div>
           <div class="panel">
             <div class="panel-head">
               <div><h2>Booking hôm nay</h2><p>Lịch hẹn theo thứ tự thời gian</p></div>
@@ -46,6 +48,10 @@
 
         <section id="view-bookings" class="view">
           <?!= include('booking'); ?>
+        </section>
+
+        <section id="view-prepaid" class="view">
+          <?!= include('prepaid'); ?>
         </section>
 
         <section id="view-reports" class="view">
@@ -65,6 +71,7 @@
           dashboard: ['Tổng quan', 'Vận hành hằng ngày'],
           customers: ['Khách hàng', 'Hồ sơ và lịch sử khách hàng'],
           bookings: ['Booking', 'Lịch hẹn và trạng thái phục vụ'],
+          prepaid: ['Thẻ trả trước', 'Ưu đãi, số buổi còn lại và cảnh báo'],
           reports: ['Báo cáo', 'Doanh thu theo ngày, dịch vụ và nhân viên'],
           settings: ['Cài đặt', 'Danh mục nhân viên và dịch vụ']
         },
@@ -86,6 +93,7 @@
           if (viewName === 'dashboard') this.loadDashboard();
           if (viewName === 'customers') loadCustomers();
           if (viewName === 'bookings') loadBookingScreen();
+          if (viewName === 'prepaid') loadPrepaidScreen();
           if (viewName === 'reports') loadReports();
           if (viewName === 'settings') loadSettings();
         },
@@ -97,17 +105,25 @@
           const revenue = data.revenue || {};
           const booking = data.bookings || {};
           const customers = data.customers || {};
+          const prepaid = data.prepaid || {};
           const cards = [
-            ['Doanh thu hôm nay', this.currency(revenue.today), 'Chỉ tính ca đã hoàn thành'],
+            ['Doanh thu hôm nay', this.currency(revenue.today), 'Gồm tiền mua thẻ trả trước'],
             ['Doanh thu tuần', this.currency(revenue.week), 'Từ thứ Hai đến Chủ nhật'],
             ['Doanh thu tháng', this.currency(revenue.month), 'Tháng hiện tại'],
             ['Booking hôm nay', booking.activeToday || 0, (booking.pendingConfirmation || 0) + ' lịch chưa xác nhận'],
             ['Khách mới hôm nay', customers.newToday || 0, 'Tổng hồ sơ: ' + (customers.total || 0)],
-            ['Đang phục vụ', booking.serving || 0, 'Đã hoàn thành: ' + (booking.completed || 0)]
+            ['Đang phục vụ', booking.serving || 0, 'Đã hoàn thành: ' + (booking.completed || 0)],
+            ['Thẻ sắp hết', (prepaid.nearEnd || []).length, 'Đang dùng: ' + (prepaid.activeCards || 0) + ' thẻ']
           ];
           document.getElementById('dashboardCards').innerHTML = cards.map(function (card) {
             return '<article class="metric-card"><p>' + app.escape(card[0]) + '</p><strong>' + app.escape(card[1]) + '</strong><span>' + app.escape(card[2]) + '</span></article>';
           }).join('');
+          const alerts = prepaid.nearEnd || [];
+          const alertBox = document.getElementById('dashboardPrepaidAlerts');
+          alertBox.classList.toggle('hidden', !alerts.length);
+          alertBox.textContent = alerts.length ? 'Cảnh báo thẻ gần hết: ' + alerts.map(function (card) {
+            return card.CustomerName + ' (' + card.ServiceName + ') còn ' + card.RemainingSessions + ' buổi';
+          }).join('; ') : '';
           const schedule = data.todaySchedule || [];
           document.getElementById('todaySchedule').innerHTML = schedule.length ? schedule.map(function (item) {
             return '<article class="schedule-item"><time>' + app.escape(item.StartTime) + '</time><div><strong>' + app.escape(item.CustomerName) + '</strong><p>' + app.escape(item.ServiceID) + ' · Giường ' + app.escape(item.BedID) + '</p></div><span class="status-chip">' + app.escape(item.Status) + '</span></article>';
@@ -139,6 +155,7 @@
     </script>
     <?!= include('customer_script'); ?>
     <?!= include('booking_script'); ?>
+    <?!= include('prepaid_script'); ?>
     <?!= include('report_script'); ?>
     <?!= include('settings_script'); ?>
     <?!= include('auth_script'); ?>

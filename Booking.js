@@ -134,7 +134,28 @@ class BookingService {
   }
 
   static complete(bookingId) {
-    return this.changeStatus(bookingId, CONFIG.BOOKING_STATUS.COMPLETED);
+    this.initialize();
+    const current = this.get(bookingId);
+    if (!current) throw new Error('Không tìm thấy booking: ' + bookingId);
+    if (current.Status === CONFIG.BOOKING_STATUS.COMPLETED) return current;
+    this.assertStatusTransition(current.Status, CONFIG.BOOKING_STATUS.COMPLETED);
+
+    const prepaid = typeof PrepaidService !== 'undefined'
+      ? PrepaidService.consumeForBooking(current)
+      : { used: false };
+    const changes = {
+      Status: CONFIG.BOOKING_STATUS.COMPLETED,
+      UpdatedDate: new Date()
+    };
+    // Revenue for prepaid cards is recorded on the purchase date. A session
+    // paid by card is therefore zero-priced here to prevent double counting.
+    if (prepaid.used) changes.FinalPrice = 0;
+
+    const saved = Database.update(this.TABLE, bookingId, changes, 'BookingID');
+    this.audit('STATUS_' + this.statusKey(CONFIG.BOOKING_STATUS.COMPLETED), bookingId, Object.assign(
+      this.auditMetadata(saved), { prepaidCardId: prepaid.cardId || '', prepaidUsed: Boolean(prepaid.used) }
+    ));
+    return Object.assign({}, saved, { Prepaid: prepaid });
   }
 
   static cancel(bookingId, note) {

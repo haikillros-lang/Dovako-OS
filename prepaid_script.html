@@ -1,0 +1,102 @@
+<script>
+  const prepaidUi = { options: { customers: [], services: [], discountOptions: [20, 25], bonusSessions: 1 } };
+
+  function loadPrepaidScreen() {
+    apiCall('getPrepaidOptions', [], function (options) {
+      prepaidUi.options = options || prepaidUi.options;
+      renderPrepaidOptions();
+      loadPrepaidCards();
+    }, handlePrepaidError);
+  }
+
+  function renderPrepaidOptions() {
+    fillPrepaidSelect('prepaidCustomer', prepaidUi.options.customers, 'CustomerID', function (item) {
+      return item.FullName + ' · ' + item.Phone;
+    });
+    fillPrepaidSelect('prepaidService', prepaidUi.options.services, 'ServiceID', function (item) {
+      return item.ServiceName + ' · ' + app.currency(item.Price);
+    });
+    const discount = document.getElementById('prepaidDiscount');
+    discount.innerHTML = (prepaidUi.options.discountOptions || [20, 25]).map(function (item) {
+      return '<option value="' + app.escape(item) + '">' + app.escape(item) + '%</option>';
+    }).join('');
+    document.getElementById('prepaidBonusSessions').value = (prepaidUi.options.bonusSessions || 1) + ' buổi';
+    prepaidRecalculate();
+  }
+
+  function fillPrepaidSelect(id, items, idKey, label) {
+    const select = document.getElementById(id);
+    const current = select.value;
+    select.innerHTML = '<option value="">Chọn</option>' + (items || []).map(function (item) {
+      return '<option value="' + app.escape(item[idKey]) + '">' + app.escape(label(item)) + '</option>';
+    }).join('');
+    select.value = current;
+  }
+
+  function prepaidRecalculate() {
+    const serviceId = document.getElementById('prepaidService').value;
+    const service = (prepaidUi.options.services || []).find(function (item) { return item.ServiceID === serviceId; });
+    const paidSessions = Number(document.getElementById('prepaidPaidSessions').value || 0);
+    const discount = Number(document.getElementById('prepaidDiscount').value || 0);
+    const bonus = Number(prepaidUi.options.bonusSessions || 1);
+    const summary = document.getElementById('prepaidSummary');
+    if (!service || paidSessions < 1) {
+      summary.textContent = 'Chọn dịch vụ và số buổi để xem giá thẻ.';
+      return;
+    }
+    const listPrice = Number(service.Price || 0) * paidSessions;
+    const discountAmount = Math.round(listPrice * discount / 100);
+    const paidAmount = Math.max(0, listPrice - discountAmount);
+    summary.textContent = 'Giá niêm yết ' + app.currency(listPrice) + ' · giảm ' + app.currency(discountAmount) + ' (' + discount + '%) · thanh toán ' + app.currency(paidAmount) + ' · sử dụng ' + (paidSessions + bonus) + ' buổi.';
+  }
+
+  function loadPrepaidCards() {
+    document.getElementById('prepaidList').innerHTML = '<div class="empty-state">Đang tải thẻ...</div>';
+    apiCall('getPrepaidCards', [{ includeInactive: false }], renderPrepaidCards, handlePrepaidError);
+  }
+
+  function renderPrepaidCards(cards) {
+    const customers = (prepaidUi.options.customers || []).reduce(function (map, customer) { map[customer.CustomerID] = customer.FullName; return map; }, {});
+    document.getElementById('prepaidCount').textContent = (cards || []).length + ' thẻ';
+    document.getElementById('prepaidList').innerHTML = cards && cards.length ? cards.map(function (card) {
+      const remaining = Number(card.RemainingSessions || 0);
+      const state = card.Status === 'Exhausted' ? 'Đã hết' : card.Status === 'NearEnd' ? 'Sắp hết' : 'Đang dùng';
+      const stateClass = card.Status === 'Exhausted' ? 'inactive' : card.Status === 'NearEnd' ? 'danger' : '';
+      return '<div class="catalog-item"><div><strong>' + app.escape(customers[card.CustomerID] || card.CustomerID) + ' · ' + app.escape(card.ServiceName || card.ServiceID) + '</strong><small>' + app.escape(card.CardID) + ' · còn ' + remaining + '/' + app.escape(card.TotalSessions) + ' buổi · đã thanh toán ' + app.currency(card.PaidAmount) + '</small></div><span class="status-chip ' + stateClass + '">' + state + '</span></div>';
+    }).join('') : '<div class="empty-state">Chưa có thẻ trả trước.</div>';
+  }
+
+  function handlePrepaidError(error) {
+    app.toast(error && error.message ? error.message : 'Không thể xử lý thẻ trả trước.', 'error');
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const today = new Date().toISOString().slice(0, 10);
+    document.getElementById('prepaidPurchasedDate').value = today;
+    document.getElementById('prepaidService').addEventListener('change', prepaidRecalculate);
+    document.getElementById('prepaidPaidSessions').addEventListener('input', prepaidRecalculate);
+    document.getElementById('prepaidDiscount').addEventListener('change', prepaidRecalculate);
+    document.getElementById('prepaidForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      const button = document.getElementById('savePrepaidButton');
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      button.disabled = true;
+      button.textContent = 'Đang tạo thẻ...';
+      apiCall('createPrepaidCard', [data], function (card) {
+        app.toast('Đã tạo thẻ ' + card.CardID + '. Khách được tặng ' + card.BonusSessions + ' buổi.');
+        event.currentTarget.reset();
+        document.getElementById('prepaidPaidSessions').value = 10;
+        document.getElementById('prepaidPurchasedDate').value = today;
+        button.disabled = false;
+        button.textContent = 'Tạo thẻ trả trước';
+        prepaidRecalculate();
+        loadPrepaidCards();
+        app.loadDashboard();
+      }, function (error) {
+        button.disabled = false;
+        button.textContent = 'Tạo thẻ trả trước';
+        handlePrepaidError(error);
+      });
+    });
+  });
+</script>

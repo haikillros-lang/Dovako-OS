@@ -60,6 +60,10 @@ const CONFIG = Object.freeze({
 
     FILES: "FILES",
 
+    PREPAID_CARDS: "PREPAID_CARDS",
+
+    PREPAID_USAGE: "PREPAID_USAGE",
+
     REPORTS: "REPORTS",
 
     SETTINGS: "SETTINGS",
@@ -103,6 +107,20 @@ const CONFIG = Object.freeze({
     CANCELLED: "Hủy lịch",
 
     NOSHOW: "Không đến"
+
+  },
+
+  //==========================
+  // PREPAID CARDS
+  //==========================
+
+  PREPAID: {
+
+    DISCOUNT_OPTIONS: [20, 25],
+
+    BONUS_SESSIONS: 1,
+
+    NEAR_END_REMAINING: 2
 
   },
 
@@ -173,6 +191,10 @@ const CONFIG = Object.freeze({
     SERVICE: "DV",
 
     FILE: "FL"
+
+    ,PREPAID_CARD: "PT"
+
+    ,PREPAID_USAGE: "PU"
 
   },
 

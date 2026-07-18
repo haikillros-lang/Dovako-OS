@@ -1,0 +1,21 @@
+<div class="booking-layout">
+  <section class="panel booking-form-panel" data-roles="Admin,Manager,Reception">
+    <div class="panel-head compact"><div><h2>Bán thẻ trả trước</h2><p>Giảm 20% hoặc 25%, tặng kèm 1 buổi dịch vụ.</p></div></div>
+    <form id="prepaidForm" class="form-grid" novalidate>
+      <label class="form-field wide"><span>Khách hàng <b>*</b></span><select id="prepaidCustomer" name="CustomerID" required><option value="">Chọn khách hàng</option></select></label>
+      <label class="form-field wide"><span>Dịch vụ <b>*</b></span><select id="prepaidService" name="ServiceID" required><option value="">Chọn dịch vụ</option></select></label>
+      <label class="form-field"><span>Số buổi mua <b>*</b></span><input id="prepaidPaidSessions" name="PaidSessions" type="number" min="1" max="500" value="10" required></label>
+      <label class="form-field"><span>Giảm giá <b>*</b></span><select id="prepaidDiscount" name="DiscountPercent" required><option value="20">20%</option><option value="25">25%</option></select></label>
+      <label class="form-field"><span>Ngày mua <b>*</b></span><input id="prepaidPurchasedDate" name="PurchasedDate" type="date" required></label>
+      <label class="form-field"><span>Buổi tặng</span><input id="prepaidBonusSessions" type="text" value="1 buổi" readonly></label>
+      <div id="prepaidSummary" class="notice wide">Chọn dịch vụ để xem giá thẻ.</div>
+      <label class="form-field wide"><span>Ghi chú</span><textarea name="Note" rows="2" maxlength="1000" placeholder="Gói ưu đãi, thời hạn áp dụng nếu có..."></textarea></label>
+      <div class="form-actions wide"><button id="savePrepaidButton" class="button primary" type="submit">Tạo thẻ trả trước</button></div>
+    </form>
+  </section>
+
+  <section class="panel booking-list-panel">
+    <div class="panel-head compact"><div><h2>Thẻ đang quản lý</h2><p id="prepaidCount">Đang tải...</p></div></div>
+    <div id="prepaidList" class="catalog-list"><div class="empty-state">Đang tải...</div></div>
+  </section>
+</div>
