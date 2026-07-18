@@ -35,7 +35,7 @@ class BookingService {
       return !BookingService.isUnavailableStatus(booking.Status);
     });
     return bookings
-      .map(this.normalizeTimeFields)
+      .map(function (booking) { return BookingService.normalizeTimeFields(booking); })
       .sort(this.sortByDateTime);
   }
 
