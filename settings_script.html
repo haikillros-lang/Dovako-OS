@@ -1,4 +1,6 @@
 <script>
+  const settingsUi = { editingUserId: null };
+
   function loadSettings() {
     apiCall('getEmployees', [], renderEmployees, handleSettingsError);
     apiCall('getServices', [], renderServices, handleSettingsError);
@@ -19,7 +21,7 @@
   function renderUsers(items) {
     document.getElementById('userList').innerHTML = items.length ? items.map(function (item) {
       const canDeactivate = authUi.user && item.UserID !== authUi.user.UserID && item.Status === 'Active';
-      return '<div class="catalog-item"><div><strong>' + app.escape(item.FullName) + '</strong><small>' + app.escape(item.Username) + ' · ' + app.escape(item.Role) + (item.EmployeeID ? ' · ' + app.escape(item.EmployeeID) : '') + '</small></div>' + (canDeactivate ? '<button class="icon-button danger" onclick="deactivateUserUi(\'' + app.escape(item.UserID) + '\')">Khóa</button>' : '') + '</div>';
+      return '<div class="catalog-item"><div><strong>' + app.escape(item.FullName) + '</strong><small>' + app.escape(item.Username) + ' · ' + app.escape(item.Role) + (item.EmployeeID ? ' · ' + app.escape(item.EmployeeID) : '') + '</small></div><div><button class="icon-button" onclick="editUserUi(\'' + app.escape(item.UserID) + '\')">Sửa</button>' + (canDeactivate ? '<button class="icon-button danger" onclick="deactivateUserUi(\'' + app.escape(item.UserID) + '\')">Khóa</button>' : '') + '</div></div>';
     }).join('') : '<div class="empty-state">Chưa có tài khoản nào.</div>';
   }
   function archiveEmployeeUi(id) { if (confirm('Lưu trữ nhân viên này?')) apiCall('archiveEmployee', [id], loadSettings, handleSettingsError); }
@@ -35,10 +37,55 @@
     }, handleSettingsError);
   }
   function deactivateUserUi(id) { if (confirm('Khóa tài khoản này?')) apiCall('deactivateUser', [id], loadSettings, handleSettingsError); }
+  function editUserUi(id) {
+    apiCall('getUsers', [], function (items) {
+      const user = (items || []).find(function (item) { return item.UserID === id; });
+      if (!user) { app.toast('Không tìm thấy tài khoản.', 'error'); return; }
+      const form = document.getElementById('userForm');
+      settingsUi.editingUserId = id;
+      form.elements.FullName.value = user.FullName || '';
+      form.elements.Username.value = user.Username || '';
+      form.elements.Password.value = '';
+      form.elements.Password.placeholder = 'Để trống nếu không đổi mật khẩu';
+      form.elements.Role.value = user.Role || 'Reception';
+      form.elements.EmployeeID.value = user.EmployeeID || '';
+      document.getElementById('saveUserButton').textContent = 'Lưu thay đổi';
+      document.getElementById('cancelUserEditButton').classList.remove('hidden');
+      form.elements.FullName.focus();
+    }, handleSettingsError);
+  }
+  function cancelUserEditUi() {
+    settingsUi.editingUserId = null;
+    const form = document.getElementById('userForm');
+    form.reset();
+    form.elements.Password.placeholder = 'Mật khẩu (từ 8 ký tự)';
+    document.getElementById('saveUserButton').textContent = 'Tạo tài khoản';
+    document.getElementById('cancelUserEditButton').classList.add('hidden');
+  }
+  function repairDuplicateUsersUi() {
+    const message = 'Hệ thống sẽ giữ tài khoản đầu tiên của mỗi tên đăng nhập, đổi mã của bản ghi trùng và khóa các bản ghi dư. Tiếp tục?';
+    if (!confirm(message)) return;
+    apiCall('repairDuplicateAccounts', [], function (result) {
+      app.toast('Đã sửa ' + (result.repairedIds || 0) + ' mã và khóa ' + (result.lockedDuplicates || 0) + ' tài khoản trùng.');
+      loadSettings();
+    }, handleSettingsError);
+  }
   function handleSettingsError(error) { app.toast(error && error.message ? error.message : 'Không thể cập nhật cài đặt.', 'error'); }
   document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('employeeForm').addEventListener('submit', function (event) { event.preventDefault(); apiCall('createEmployee', [Object.fromEntries(new FormData(event.currentTarget).entries())], function () { event.currentTarget.reset(); app.toast('Đã thêm nhân viên.'); loadSettings(); }, handleSettingsError); });
     document.getElementById('serviceForm').addEventListener('submit', function (event) { event.preventDefault(); apiCall('createService', [Object.fromEntries(new FormData(event.currentTarget).entries())], function () { event.currentTarget.reset(); app.toast('Đã thêm dịch vụ.'); loadSettings(); }, handleSettingsError); });
-    document.getElementById('userForm').addEventListener('submit', function (event) { event.preventDefault(); apiCall('createUser', [Object.fromEntries(new FormData(event.currentTarget).entries())], function () { event.currentTarget.reset(); app.toast('Đã tạo tài khoản.'); loadSettings(); }, handleSettingsError); });
+    document.getElementById('userForm').addEventListener('submit', function (event) {
+      event.preventDefault();
+      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      if (!settingsUi.editingUserId && !data.Password) { app.toast('Nhập mật khẩu cho tài khoản mới.', 'error'); return; }
+      const action = settingsUi.editingUserId ? 'updateUser' : 'createUser';
+      const args = settingsUi.editingUserId ? [settingsUi.editingUserId, data] : [data];
+      apiCall(action, args, function () {
+        const wasEditing = Boolean(settingsUi.editingUserId);
+        cancelUserEditUi();
+        app.toast(wasEditing ? 'Đã cập nhật tài khoản.' : 'Đã tạo tài khoản.');
+        loadSettings();
+      }, handleSettingsError);
+    });
   });
 </script>
