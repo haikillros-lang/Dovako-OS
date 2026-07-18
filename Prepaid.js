@@ -71,7 +71,9 @@ class PrepaidService {
       throw new Error('Giảm giá chỉ áp dụng 20% hoặc 25%.');
     }
 
-    const bonusSessions = this.bonusSessions();
+    const bonusSessions = data.BonusSessions === undefined || data.BonusSessions === ''
+      ? this.bonusSessions()
+      : Validator.integer(data.BonusSessions, 'Buổi tặng', { required: true, min: 0, max: 100 });
     const unitPrice = Number(service.Price || 0);
     const listPrice = unitPrice * paidSessions;
     const discountAmount = Math.round(listPrice * discountPercent / 100);
@@ -104,6 +106,34 @@ class PrepaidService {
 
     AppLogger.safe('AUDIT', 'PrepaidCard', 'CREATE', saved.CardID, 'CREATE prepaid card', {
       customerId: customerId, serviceId: serviceId, paidAmount: paidAmount, totalSessions: totalSessions
+    });
+    return saved;
+  }
+
+  /** Admin and Reception can correct the complimentary sessions after sale. */
+  static updateBonus(cardId, bonusSessions) {
+    this.initialize();
+    const current = Database.findById(this.CARD_TABLE, Validator.required(cardId, 'Mã thẻ'), 'CardID');
+    if (!current) throw new Error('Không tìm thấy thẻ trả trước.');
+
+    const bonus = Validator.integer(bonusSessions, 'Buổi tặng', { required: true, min: 0, max: 100 });
+    const paidSessions = Number(current.PaidSessions || 0);
+    const usedSessions = Number(current.UsedSessions || 0);
+    const totalSessions = paidSessions + bonus;
+    if (totalSessions < usedSessions) {
+      throw new Error('Không thể giảm buổi tặng vì khách đã sử dụng ' + usedSessions + ' buổi.');
+    }
+
+    const remaining = totalSessions - usedSessions;
+    const saved = Database.update(this.CARD_TABLE, current.CardID, {
+      BonusSessions: bonus,
+      TotalSessions: totalSessions,
+      RemainingSessions: remaining,
+      Status: this.statusForRemaining(remaining),
+      UpdatedDate: new Date()
+    }, 'CardID');
+    AppLogger.safe('AUDIT', 'PrepaidCard', 'UPDATE_BONUS', current.CardID, 'UPDATE prepaid bonus sessions', {
+      bonusSessions: bonus, remainingSessions: remaining
     });
     return saved;
   }
@@ -205,3 +235,4 @@ function getPrepaidOptions(token) { AuthService.requireSession(token, [CONFIG.RO
 function getPrepaidCards(token, options) { AuthService.requireSession(token); return Utils.toClient(PrepaidService.list(options)); }
 function getAvailablePrepaidCards(token, customerId, serviceId) { AuthService.requireSession(token); return Utils.toClient(PrepaidService.available(customerId, serviceId)); }
 function createPrepaidCard(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.create(data)); }
+function updatePrepaidCardBonus(token, cardId, bonusSessions) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.updateBonus(cardId, bonusSessions)); }

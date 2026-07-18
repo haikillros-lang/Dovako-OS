@@ -7,7 +7,7 @@
       <label class="form-field"><span>Số buổi mua <b>*</b></span><input id="prepaidPaidSessions" name="PaidSessions" type="number" min="1" max="500" value="10" required></label>
       <label class="form-field"><span>Giảm giá <b>*</b></span><select id="prepaidDiscount" name="DiscountPercent" required><option value="20">20%</option><option value="25">25%</option></select></label>
       <label class="form-field"><span>Ngày mua <b>*</b></span><input id="prepaidPurchasedDate" name="PurchasedDate" type="date" required></label>
-      <label class="form-field"><span>Buổi tặng</span><input id="prepaidBonusSessions" type="text" value="1 buổi" readonly></label>
+      <label class="form-field"><span>Buổi tặng</span><input id="prepaidBonusSessions" name="BonusSessions" type="number" min="0" max="100" value="1" required></label>
       <div id="prepaidSummary" class="notice wide">Chọn dịch vụ để xem giá thẻ.</div>
       <label class="form-field wide"><span>Ghi chú</span><textarea name="Note" rows="2" maxlength="1000" placeholder="Gói ưu đãi, thời hạn áp dụng nếu có..."></textarea></label>
       <div class="form-actions wide"><button id="savePrepaidButton" class="button primary" type="submit">Tạo thẻ trả trước</button></div>

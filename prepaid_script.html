@@ -20,7 +20,7 @@
     discount.innerHTML = (prepaidUi.options.discountOptions || [20, 25]).map(function (item) {
       return '<option value="' + app.escape(item) + '">' + app.escape(item) + '%</option>';
     }).join('');
-    document.getElementById('prepaidBonusSessions').value = (prepaidUi.options.bonusSessions || 1) + ' buổi';
+    if (!document.getElementById('prepaidBonusSessions').value) document.getElementById('prepaidBonusSessions').value = prepaidUi.options.bonusSessions || 1;
     prepaidRecalculate();
   }
 
@@ -38,7 +38,7 @@
     const service = (prepaidUi.options.services || []).find(function (item) { return item.ServiceID === serviceId; });
     const paidSessions = Number(document.getElementById('prepaidPaidSessions').value || 0);
     const discount = Number(document.getElementById('prepaidDiscount').value || 0);
-    const bonus = Number(prepaidUi.options.bonusSessions || 1);
+    const bonus = Number(document.getElementById('prepaidBonusSessions').value || 0);
     const summary = document.getElementById('prepaidSummary');
     if (!service || paidSessions < 1) {
       summary.textContent = 'Chọn dịch vụ và số buổi để xem giá thẻ.';
@@ -62,8 +62,20 @@
       const remaining = Number(card.RemainingSessions || 0);
       const state = card.Status === 'Exhausted' ? 'Đã hết' : card.Status === 'NearEnd' ? 'Sắp hết' : 'Đang dùng';
       const stateClass = card.Status === 'Exhausted' ? 'inactive' : card.Status === 'NearEnd' ? 'danger' : '';
-      return '<div class="catalog-item"><div><strong>' + app.escape(customers[card.CustomerID] || card.CustomerID) + ' · ' + app.escape(card.ServiceName || card.ServiceID) + '</strong><small>' + app.escape(card.CardID) + ' · còn ' + remaining + '/' + app.escape(card.TotalSessions) + ' buổi · đã thanh toán ' + app.currency(card.PaidAmount) + '</small></div><span class="status-chip ' + stateClass + '">' + state + '</span></div>';
+      const canEditBonus = authUi.user && (authUi.user.Role === 'Admin' || authUi.user.Role === 'Reception');
+      const action = canEditBonus ? '<button class="icon-button" onclick="updatePrepaidBonusUi(\'' + app.escape(card.CardID) + '\',' + Number(card.BonusSessions || 0) + ')">Cập nhật tặng</button>' : '';
+      return '<div class="catalog-item"><div><strong>' + app.escape(customers[card.CustomerID] || card.CustomerID) + ' · ' + app.escape(card.ServiceName || card.ServiceID) + '</strong><small>' + app.escape(card.CardID) + ' · mua ' + app.escape(card.PaidSessions) + ' + tặng ' + app.escape(card.BonusSessions) + ' buổi · còn ' + remaining + '/' + app.escape(card.TotalSessions) + ' buổi · đã thanh toán ' + app.currency(card.PaidAmount) + '</small></div><div>' + action + '<span class="status-chip ' + stateClass + '">' + state + '</span></div></div>';
     }).join('') : '<div class="empty-state">Chưa có thẻ trả trước.</div>';
+  }
+
+  function updatePrepaidBonusUi(cardId, currentBonus) {
+    const value = window.prompt('Nhập số buổi tặng cho thẻ ' + cardId + ':', currentBonus);
+    if (value === null) return;
+    apiCall('updatePrepaidCardBonus', [cardId, value], function (card) {
+      app.toast('Đã cập nhật thẻ ' + card.CardID + ': tặng ' + card.BonusSessions + ' buổi.');
+      loadPrepaidCards();
+      app.loadDashboard();
+    }, handlePrepaidError);
   }
 
   function handlePrepaidError(error) {
@@ -76,6 +88,7 @@
     document.getElementById('prepaidService').addEventListener('change', prepaidRecalculate);
     document.getElementById('prepaidPaidSessions').addEventListener('input', prepaidRecalculate);
     document.getElementById('prepaidDiscount').addEventListener('change', prepaidRecalculate);
+    document.getElementById('prepaidBonusSessions').addEventListener('input', prepaidRecalculate);
     document.getElementById('prepaidForm').addEventListener('submit', function (event) {
       event.preventDefault();
       const button = document.getElementById('savePrepaidButton');
@@ -86,6 +99,7 @@
         app.toast('Đã tạo thẻ ' + card.CardID + '. Khách được tặng ' + card.BonusSessions + ' buổi.');
         event.currentTarget.reset();
         document.getElementById('prepaidPaidSessions').value = 10;
+        document.getElementById('prepaidBonusSessions').value = prepaidUi.options.bonusSessions || 1;
         document.getElementById('prepaidPurchasedDate').value = today;
         button.disabled = false;
         button.textContent = 'Tạo thẻ trả trước';
