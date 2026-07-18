@@ -4,3 +4,4 @@ node_modules/
 Thumbs.db
 backend/
 frontend/
+LegacyCustomerImportData_*.js

@@ -441,6 +441,57 @@ class Database {
   }
 
   /**
+   * Inserts a batch while assigning sequential IDs under one lock.  This is
+   * intentionally used for controlled imports so a large customer file does
+   * not trigger a separate Sheet read and write for every record.
+   */
+  static insertManyWithGeneratedIds(sheetName, prefix, records, options) {
+    if (!Array.isArray(records)) {
+      throw new Error('Database.insertManyWithGeneratedIds requires a record array.');
+    }
+    if (records.length === 0) return [];
+
+    const settings = options || {};
+    const headers = this.headers(sheetName);
+    const idColumn = settings.idColumn || headers[0];
+    const padding = settings.padding || 6;
+    const lock = LockService.getScriptLock();
+    lock.waitLock(settings.lockTimeoutMs || 30000);
+
+    try {
+      const pattern = new RegExp('^' + this.escapeRegExp(prefix) + '(\\d+)$');
+      let highest = this.findAll(sheetName).reduce(function (max, current) {
+        const match = String(current[idColumn] || '').match(pattern);
+        return match ? Math.max(max, Number(match[1])) : max;
+      }, 0);
+
+      const rows = [];
+      const saved = [];
+      records.forEach(function (record, index) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) {
+          throw new Error('Bản ghi nhập thứ ' + (index + 1) + ' không hợp lệ.');
+        }
+        const data = Object.assign({}, record);
+        highest += 1;
+        data[idColumn] = prefix + String(highest).padStart(padding, '0');
+        const row = Database.objectToRow(headers, data);
+        rows.push(row);
+        saved.push({ data: data, row: row });
+      });
+
+      const sheet = this.table(sheetName);
+      const firstRow = Math.max(sheet.getLastRow() + 1, 2);
+      sheet.getRange(firstRow, 1, rows.length, headers.length).setValues(rows);
+      SpreadsheetApp.flush();
+      return saved.map(function (item, index) {
+        return Database.rowToObject(headers, item.row, firstRow + index);
+      });
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  /**
    * Repairs blank or repeated IDs in a reference table without deleting data.
    * The first record using a duplicated ID keeps that ID so existing booking
    * references continue to point to the same record. Every later duplicate
