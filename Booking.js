@@ -34,12 +34,14 @@ class BookingService {
     if (!includeCancelled) bookings = bookings.filter(function (booking) {
       return !BookingService.isUnavailableStatus(booking.Status);
     });
-    return bookings.sort(this.sortByDateTime);
+    return bookings
+      .map(this.normalizeTimeFields)
+      .sort(this.sortByDateTime);
   }
 
   static get(bookingId) {
     this.initialize();
-    return Database.findById(this.TABLE, Validator.required(bookingId, 'Mã booking'), 'BookingID');
+    return this.normalizeTimeFields(Database.findById(this.TABLE, Validator.required(bookingId, 'Mã booking'), 'BookingID'));
   }
 
   static today() {
@@ -219,9 +221,10 @@ class BookingService {
   }
 
   static assertNoConflict(candidate, excludedBookingId) {
-    const conflicts = Database.findAll(this.TABLE).filter(function (booking) {
+    // Read through list() so legacy Sheet time cells are normalized to HH:mm
+    // before overlap checking. Direct raw reads can contain 1899-12-30 dates.
+    const conflicts = this.list({ date: candidate.BookingDate, includeCancelled: true }).filter(function (booking) {
       if (booking.BookingID === excludedBookingId || BookingService.isUnavailableStatus(booking.Status)) return false;
-      if (!BookingService.sameDay(booking.BookingDate, candidate.BookingDate)) return false;
       if (!BookingService.timesOverlap(booking.StartTime, booking.EndTime, candidate.StartTime, candidate.EndTime)) return false;
       return booking.BedID === candidate.BedID ||
         booking.EmployeeID === candidate.EmployeeID ||
@@ -261,6 +264,39 @@ class BookingService {
     if (Math.abs(booking.FinalPrice - expected) > 0.009) {
       throw new Error('Thành tiền phải bằng giá dịch vụ trừ giảm giá.');
     }
+  }
+
+  /**
+   * Legacy Google Sheet time cells may be returned as Date values based on
+   * 1899-12-30. Convert them to a plain HH:mm string before any scheduling
+   * or client rendering so the fake date is never displayed.
+   */
+  static normalizeTimeFields(booking) {
+    if (!booking) return booking;
+    return Object.assign({}, booking, {
+      StartTime: this.normalizeTimeValue(booking.StartTime),
+      EndTime: this.normalizeTimeValue(booking.EndTime)
+    });
+  }
+
+  static normalizeTimeValue(value) {
+    if (value === null || value === undefined || value === '') return '';
+    if (value instanceof Date) {
+      // Existing time-only cells use their UTC clock time; formatting them in
+      // GMT prevents a second Asia/Ho_Chi_Minh offset from being applied.
+      return Utilities.formatDate(value, 'GMT', 'HH:mm');
+    }
+    const text = String(value).trim();
+    const isoMatch = text.match(/T(\d{2}):(\d{2})/);
+    if (isoMatch) return isoMatch[1] + ':' + isoMatch[2];
+    const timeMatch = text.match(/(?:^|\s)(\d{1,2}):(\d{2})(?:\s|$)/);
+    if (timeMatch) return String(timeMatch[1]).padStart(2, '0') + ':' + timeMatch[2];
+    const serial = Number(text);
+    if (Number.isFinite(serial) && serial >= 0 && serial < 1) {
+      const totalMinutes = Math.round(serial * 24 * 60) % (24 * 60);
+      return this.minutesToTime(totalMinutes);
+    }
+    return text;
   }
 
   /**
