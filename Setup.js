@@ -19,8 +19,8 @@ class SystemSetup {
       ],
       PREPAID_CARDS: PrepaidService.CARD_HEADERS,
       PREPAID_USAGE: PrepaidService.USAGE_HEADERS,
-      LOGS: AppLogger.HEADERS
-      ,USERS: AuthService.HEADERS
+      LOGS: AppLogger.HEADERS,
+      USERS: AuthService.HEADERS
     };
   }
 

@@ -25,6 +25,14 @@
     }).join('') : '<div class="empty-state">Chưa có tài khoản nào.</div>';
   }
   function archiveEmployeeUi(id) { if (confirm('Lưu trữ nhân viên này?')) apiCall('archiveEmployee', [id], loadSettings, handleSettingsError); }
+  function purgeUnlinkedEmployeesUi() {
+    const phrase = window.prompt('Chỉ xóa nhân viên không liên kết booking hoặc tài khoản. Nhập XOA NHAN SU để xác nhận:');
+    if (phrase === null) return;
+    apiCall('purgeUnlinkedEmployees', [phrase], function (result) {
+      app.toast('Đã xóa ' + result.deletedCount + ' nhân viên. Giữ lại ' + result.retainedCount + ' nhân viên có liên kết.');
+      loadSettings();
+    }, handleSettingsError);
+  }
   function archiveServiceUi(id) { if (confirm('Lưu trữ dịch vụ này?')) apiCall('archiveService', [id], loadSettings, handleSettingsError); }
   function repairCatalogIdsUi() {
     const message = 'Giữ nguyên mã ở dòng đầu tiên của mỗi nhóm. Các dòng trùng sau sẽ được cấp mã mới; lịch booking hiện có vẫn giữ liên kết cũ. Tiếp tục?';

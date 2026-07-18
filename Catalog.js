@@ -63,6 +63,48 @@ class CatalogService {
     return this.setStatus(CONFIG.SHEETS.EMPLOYEES, 'EmployeeID', employeeId, 'Employee');
   }
 
+  /**
+   * Admin-only cleanup: removes employee records that are not referenced by
+   * any booking or user account. Linked employees are retained automatically.
+   */
+  static purgeUnlinkedEmployees() {
+    this.initialize();
+    AuthService.initialize();
+    BookingService.initialize();
+
+    const employees = Database.findAll(CONFIG.SHEETS.EMPLOYEES);
+    const employeeIdsInBookings = Database.findAll(CONFIG.SHEETS.BOOKINGS)
+      .reduce(function (set, booking) {
+        set[String(booking.EmployeeID || '').trim()] = true;
+        return set;
+      }, {});
+    const employeeIdsInUsers = Database.findAll(CONFIG.SHEETS.USERS)
+      .reduce(function (set, user) {
+        set[String(user.EmployeeID || '').trim()] = true;
+        return set;
+      }, {});
+
+    const removable = employees.filter(function (employee) {
+      const employeeId = String(employee.EmployeeID || '').trim();
+      return !employeeIdsInBookings[employeeId] && !employeeIdsInUsers[employeeId];
+    });
+    const retained = employees.filter(function (employee) {
+      const employeeId = String(employee.EmployeeID || '').trim();
+      return employeeIdsInBookings[employeeId] || employeeIdsInUsers[employeeId];
+    });
+    const deletedCount = Database.removeRecords(CONFIG.SHEETS.EMPLOYEES, removable);
+
+    AppLogger.safe('AUDIT', 'Employee', 'PURGE_UNLINKED', '', 'PURGE unlinked employees', {
+      deletedCount: deletedCount,
+      retainedCount: retained.length
+    });
+    return {
+      deletedCount: deletedCount,
+      retainedCount: retained.length,
+      retainedEmployeeIds: retained.map(function (employee) { return employee.EmployeeID; })
+    };
+  }
+
   static archiveService(serviceId) {
     return this.setStatus(CONFIG.SHEETS.SERVICES, 'ServiceID', serviceId, 'Service');
   }
@@ -104,3 +146,10 @@ function createService(token, data) { AuthService.requireSession(token, [CONFIG.
 function archiveEmployee(token, employeeId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.archiveEmployee(employeeId)); }
 function archiveService(token, serviceId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.archiveService(serviceId)); }
 function repairDuplicateCatalogIds(token) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]); return Utils.toClient(CatalogService.repairDuplicateIds()); }
+function purgeUnlinkedEmployees(token, confirmation) {
+  AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);
+  if (String(confirmation || '').trim().toUpperCase() !== 'XOA NHAN SU') {
+    throw new Error('Gõ chính xác XOA NHAN SU để xác nhận.');
+  }
+  return Utils.toClient(CatalogService.purgeUnlinkedEmployees());
+}

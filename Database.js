@@ -303,6 +303,42 @@ class Database {
     return true;
   }
 
+  /**
+   * Permanently removes every record matching the supplied exact criteria.
+   * Rows are deleted from bottom to top so row numbers remain valid.
+   */
+  static removeWhere(sheetName, criteria) {
+    const records = this.where(sheetName, criteria)
+      .sort(function (left, right) { return right._rowNumber - left._rowNumber; });
+    if (!records.length) return 0;
+
+    const sheet = this.table(sheetName);
+    records.forEach(function (record) {
+      sheet.deleteRow(record._rowNumber);
+    });
+    SpreadsheetApp.flush();
+    return records.length;
+  }
+
+  /** Permanently removes an already-selected set of records from one table. */
+  static removeRecords(sheetName, records) {
+    if (!Array.isArray(records)) {
+      throw new Error('Database.removeRecords requires a record array.');
+    }
+
+    const rows = records
+      .map(function (record) { return Number(record && record._rowNumber); })
+      .filter(function (rowNumber) { return Number.isInteger(rowNumber) && rowNumber > 1; })
+      .filter(function (rowNumber, index, all) { return all.indexOf(rowNumber) === index; })
+      .sort(function (left, right) { return right - left; });
+    if (!rows.length) return 0;
+
+    const sheet = this.table(sheetName);
+    rows.forEach(function (rowNumber) { sheet.deleteRow(rowNumber); });
+    SpreadsheetApp.flush();
+    return rows.length;
+  }
+
   /** Alias retained for conventional CRUD naming. */
   static delete(sheetName, id, idColumn) {
     return this.remove(sheetName, id, idColumn);
