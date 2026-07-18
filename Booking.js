@@ -25,7 +25,7 @@ class BookingService {
     const date = settings.date ? Validator.date(settings.date, 'Ngày booking') : null;
     const customerId = settings.customerId ? Validator.required(settings.customerId, 'Mã khách hàng') : '';
     const includeCancelled = settings.includeCancelled === true;
-    let bookings = Database.findAll(this.TABLE);
+    let bookings = this.readAll();
 
     if (date) bookings = bookings.filter(function (booking) {
       return BookingService.sameDay(booking.BookingDate, date);
@@ -41,7 +41,8 @@ class BookingService {
 
   static get(bookingId) {
     this.initialize();
-    return this.normalizeTimeFields(Database.findById(this.TABLE, Validator.required(bookingId, 'Mã booking'), 'BookingID'));
+    const id = Validator.required(bookingId, 'Mã booking');
+    return this.readAll().find(function (booking) { return booking.BookingID === id; }) || null;
   }
 
   static today() {
@@ -279,24 +280,59 @@ class BookingService {
     });
   }
 
-  static normalizeTimeValue(value) {
+  /**
+   * Read time fields from Google Sheets' displayed values. This is the only
+   * reliable representation for legacy time-only cells, because converting
+   * their 1899 base date through time zones can shift the clock by hours.
+   */
+  static readAll() {
+    const sheet = Database.table(this.TABLE);
+    const headers = Database.headers(this.TABLE);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return [];
+    const values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+    const displayed = sheet.getRange(2, 1, lastRow - 1, headers.length).getDisplayValues();
+    const startIndex = headers.indexOf('StartTime');
+    const endIndex = headers.indexOf('EndTime');
+    return values.map(function (row, index) {
+      const booking = Database.rowToObject(headers, row, index + 2);
+      if (startIndex >= 0) booking.StartTime = BookingService.normalizeTimeValue(booking.StartTime, displayed[index][startIndex]);
+      if (endIndex >= 0) booking.EndTime = BookingService.normalizeTimeValue(booking.EndTime, displayed[index][endIndex]);
+      return booking;
+    }).filter(function (booking) {
+      return headers.some(function (header) { return booking[header] !== '' && booking[header] !== null; });
+    });
+  }
+
+  static normalizeTimeValue(value, displayedValue) {
     if (value === null || value === undefined || value === '') return '';
+    const display = String(displayedValue || '').trim();
+    const displayTime = this.parseTimeText(display);
+    if (displayTime) return displayTime;
     if (value instanceof Date) {
-      // Existing time-only cells use their UTC clock time; formatting them in
-      // GMT prevents a second Asia/Ho_Chi_Minh offset from being applied.
-      return Utilities.formatDate(value, 'GMT', 'HH:mm');
+      return String(value.getUTCHours()).padStart(2, '0') + ':' + String(value.getUTCMinutes()).padStart(2, '0');
     }
     const text = String(value).trim();
-    const isoMatch = text.match(/T(\d{2}):(\d{2})/);
-    if (isoMatch) return isoMatch[1] + ':' + isoMatch[2];
-    const timeMatch = text.match(/(?:^|\s)(\d{1,2}):(\d{2})(?:\s|$)/);
-    if (timeMatch) return String(timeMatch[1]).padStart(2, '0') + ':' + timeMatch[2];
+    const parsed = this.parseTimeText(text);
+    if (parsed) return parsed;
     const serial = Number(text);
     if (Number.isFinite(serial) && serial >= 0 && serial < 1) {
       const totalMinutes = Math.round(serial * 24 * 60) % (24 * 60);
       return this.minutesToTime(totalMinutes);
     }
     return text;
+  }
+
+  static parseTimeText(value) {
+    const match = String(value || '').match(/(?:T|^|\s)(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+    if (!match) return '';
+    let hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const meridiem = String(match[3] || '').toUpperCase();
+    if (meridiem === 'PM' && hour < 12) hour += 12;
+    if (meridiem === 'AM' && hour === 12) hour = 0;
+    return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59
+      ? String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0') : '';
   }
 
   /**
