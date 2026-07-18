@@ -112,6 +112,42 @@ class Database {
   }
 
   /**
+   * Ensures a table contains the supplied columns, adding only missing
+   * columns at the end. This is used for backward-compatible schema updates
+   * where existing operational data must never be overwritten.
+   */
+  static ensureColumns(sheetName, requiredHeaders) {
+    if (!Array.isArray(requiredHeaders) || requiredHeaders.length === 0) {
+      throw new Error('Database.ensureColumns requires one or more headers.');
+    }
+    if (new Set(requiredHeaders).size !== requiredHeaders.length || requiredHeaders.some(function (header) {
+      return !header || String(header).trim() === '';
+    })) {
+      throw new Error('Database.ensureColumns requires unique, non-empty headers.');
+    }
+
+    const spreadsheet = this.getSpreadsheet();
+    let sheet = spreadsheet.getSheetByName(sheetName);
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet(sheetName);
+      sheet.getRange(1, 1, 1, requiredHeaders.length).setValues([requiredHeaders]);
+      sheet.setFrozenRows(1);
+      return sheet;
+    }
+
+    const existing = this.headers(sheetName);
+    const missing = requiredHeaders.filter(function (header) {
+      return existing.indexOf(header) === -1;
+    });
+    if (missing.length) {
+      sheet.getRange(1, existing.length + 1, 1, missing.length).setValues([missing]);
+      sheet.setFrozenRows(1);
+      SpreadsheetApp.flush();
+    }
+    return sheet;
+  }
+
+  /**
    * Replaces headers only when the sheet has no records. This supports safe
    * first-time setup without risking any customer or booking data.
    */

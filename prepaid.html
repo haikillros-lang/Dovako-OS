@@ -1,21 +1,34 @@
 <div class="booking-layout">
   <section class="panel booking-form-panel" data-roles="Admin,Manager,Reception">
-    <div class="panel-head compact"><div><h2>Bán thẻ trả trước</h2><p>Giảm 20% hoặc 25%, tặng kèm 1 buổi dịch vụ.</p></div></div>
+    <div class="panel-head compact"><div><h2>Bán thẻ theo mệnh giá</h2><p>Chọn mệnh giá để hệ thống tự tính chiết khấu và số dư thẻ.</p></div></div>
     <form id="prepaidForm" class="form-grid" novalidate>
-      <label class="form-field wide"><span>Khách hàng <b>*</b></span><select id="prepaidCustomer" name="CustomerID" required><option value="">Chọn khách hàng</option></select></label>
-      <label class="form-field wide"><span>Dịch vụ <b>*</b></span><select id="prepaidService" name="ServiceID" required><option value="">Chọn dịch vụ</option></select></label>
-      <label class="form-field"><span>Số buổi mua <b>*</b></span><input id="prepaidPaidSessions" name="PaidSessions" type="number" min="1" max="500" value="10" required></label>
-      <label class="form-field"><span>Giảm giá <b>*</b></span><select id="prepaidDiscount" name="DiscountPercent" required><option value="20">20%</option><option value="25">25%</option></select></label>
-      <label class="form-field"><span>Ngày mua <b>*</b></span><input id="prepaidPurchasedDate" name="PurchasedDate" type="date" required></label>
+      <label class="form-field wide customer-picker"><span>Tìm khách hàng <b>*</b></span><input id="prepaidCustomerSearch" autocomplete="off" placeholder="Nhập tên, SĐT hoặc mã khách (tối thiểu 2 ký tự)"><input id="prepaidCustomer" name="CustomerID" type="hidden" required><div id="prepaidCustomerResults" class="customer-picker-results hidden"></div><small id="prepaidCustomerSelected" class="picker-hint">Chưa chọn khách hàng.</small></label>
+      <label class="form-field wide"><span>Mệnh giá thẻ <b>*</b></span><select id="prepaidPlan" name="PlanID" required><option value="">Chọn mệnh giá</option></select></label>
+      <label class="form-field"><span>Dịch vụ tặng kèm</span><select id="prepaidBonusService" name="BonusServiceID"><option value="">Không có</option></select></label>
       <label class="form-field"><span>Buổi tặng</span><input id="prepaidBonusSessions" name="BonusSessions" type="number" min="0" max="100" value="1" required></label>
-      <div id="prepaidSummary" class="notice wide">Chọn dịch vụ để xem giá thẻ.</div>
-      <label class="form-field wide"><span>Ghi chú</span><textarea name="Note" rows="2" maxlength="1000" placeholder="Gói ưu đãi, thời hạn áp dụng nếu có..."></textarea></label>
+      <label class="form-field wide"><span>Ngày mua <b>*</b></span><input id="prepaidPurchasedDate" name="PurchasedDate" type="date" required></label>
+      <div id="prepaidSummary" class="notice wide">Chọn mệnh giá để xem chiết khấu và số dư thẻ.</div>
+      <label class="form-field wide"><span>Ghi chú</span><textarea name="Note" rows="2" maxlength="1000" placeholder="Hình thức thanh toán, ưu đãi đặc biệt nếu có..."></textarea></label>
       <div class="form-actions wide"><button id="savePrepaidButton" class="button primary" type="submit">Tạo thẻ trả trước</button></div>
     </form>
   </section>
 
   <section class="panel booking-list-panel">
-    <div class="panel-head compact"><div><h2>Thẻ đang quản lý</h2><p id="prepaidCount">Đang tải...</p></div></div>
+    <div class="panel-head compact"><div><h2>Thẻ đang quản lý</h2><p id="prepaidCount">Đang tải...</p></div><input id="prepaidCardSearch" class="panel-search" placeholder="Tìm khách, SĐT hoặc mã thẻ"></div>
     <div id="prepaidList" class="catalog-list"><div class="empty-state">Đang tải...</div></div>
   </section>
 </div>
+
+<section class="panel prepaid-plan-panel" data-roles="Admin,Manager">
+  <div class="panel-head compact"><div><h2>Mệnh giá thẻ trả trước</h2><p>Admin và Quản lý tự cập nhật giá, chiết khấu và quà tặng.</p></div></div>
+  <form id="prepaidPlanForm" class="inline-form prepaid-plan-form">
+    <input name="PlanName" required placeholder="Tên mệnh giá, ví dụ Thẻ 5 triệu">
+    <input name="FaceValue" type="number" min="1" required placeholder="Mệnh giá">
+    <input name="DiscountPercent" type="number" min="0" max="100" required placeholder="Chiết khấu %">
+    <input name="BonusSessions" type="number" min="0" max="100" value="1" required placeholder="Buổi tặng">
+    <select id="prepaidPlanBonusService" name="BonusServiceID"><option value="">Không có dịch vụ tặng</option></select>
+    <button id="savePrepaidPlanButton" class="button primary">Thêm mệnh giá</button>
+    <button id="cancelPrepaidPlanEditButton" class="button secondary hidden" type="button" onclick="cancelPrepaidPlanEditUi()">Hủy</button>
+  </form>
+  <div id="prepaidPlanList" class="catalog-list"><div class="empty-state">Đang tải mệnh giá...</div></div>
+</section>

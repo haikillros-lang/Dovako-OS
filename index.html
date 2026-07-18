@@ -122,7 +122,7 @@
           const alertBox = document.getElementById('dashboardPrepaidAlerts');
           alertBox.classList.toggle('hidden', !alerts.length);
           alertBox.textContent = alerts.length ? 'Cảnh báo thẻ gần hết: ' + alerts.map(function (card) {
-            return card.CustomerName + ' (' + card.ServiceName + ') còn ' + card.RemainingSessions + ' buổi';
+            return card.CustomerName + ' (' + card.ServiceName + ') còn ' + (card.CardMode === 'Value' ? app.currency(card.RemainingValue) : card.RemainingSessions + ' buổi');
           }).join('; ') : '';
           const schedule = data.todaySchedule || [];
           document.getElementById('todaySchedule').innerHTML = schedule.length ? schedule.map(function (item) {

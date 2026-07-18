@@ -43,7 +43,12 @@ class DashboardService {
         total: customers.length
       },
       prepaid: {
-        activeCards: prepaidCards.filter(function (card) { return Number(card.RemainingSessions || 0) > 0 && card.Status !== 'Inactive'; }).length,
+        activeCards: prepaidCards.filter(function (card) {
+          const remaining = PrepaidService.isValueCard(card)
+            ? Number(card.RemainingValue || 0)
+            : Number(card.RemainingSessions || 0);
+          return remaining > 0 && card.Status !== 'Inactive';
+        }).length,
         nearEnd: this.decoratePrepaidWarnings(prepaidWarnings, customers)
       },
       todaySchedule: this.decorateSchedule(todayBookings, customers),
@@ -125,8 +130,10 @@ class DashboardService {
         CardID: card.CardID,
         CustomerID: card.CustomerID,
         CustomerName: names[card.CustomerID] || card.CustomerID,
-        ServiceName: card.ServiceName || card.ServiceID,
-        RemainingSessions: Number(card.RemainingSessions || 0)
+        ServiceName: PrepaidService.isValueCard(card) ? (card.PlanName || 'Thẻ mệnh giá') : (card.ServiceName || card.ServiceID),
+        RemainingSessions: Number(card.RemainingSessions || 0),
+        RemainingValue: Number(card.RemainingValue || 0),
+        CardMode: PrepaidService.isValueCard(card) ? 'Value' : 'Session'
       };
     });
   }

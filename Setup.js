@@ -19,6 +19,7 @@ class SystemSetup {
       ],
       PREPAID_CARDS: PrepaidService.CARD_HEADERS,
       PREPAID_USAGE: PrepaidService.USAGE_HEADERS,
+      PREPAID_PLANS: PrepaidService.PLAN_HEADERS,
       LOGS: AppLogger.HEADERS,
       USERS: AuthService.HEADERS
     };
@@ -38,6 +39,12 @@ class SystemSetup {
       const headers = SystemSetup.TABLES[configKey];
       const spreadsheet = Database.getSpreadsheet();
       const exists = Boolean(spreadsheet.getSheetByName(sheetName));
+
+      if (configKey === 'PREPAID_CARDS' || configKey === 'PREPAID_USAGE') {
+        Database.ensureColumns(sheetName, headers);
+        results.push({ sheet: sheetName, action: exists ? 'upgraded' : 'created' });
+        return;
+      }
 
       if (!exists) {
         Database.ensureTable(sheetName, headers);

@@ -64,6 +64,8 @@ const CONFIG = Object.freeze({
 
     PREPAID_USAGE: "PREPAID_USAGE",
 
+    PREPAID_PLANS: "PREPAID_PLANS",
+
     REPORTS: "REPORTS",
 
     SETTINGS: "SETTINGS",
@@ -120,7 +122,9 @@ const CONFIG = Object.freeze({
 
     BONUS_SESSIONS: 1,
 
-    NEAR_END_REMAINING: 2
+    NEAR_END_REMAINING: 2,
+
+    NEAR_END_BALANCE: 200000
 
   },
 
@@ -195,6 +199,8 @@ const CONFIG = Object.freeze({
     ,PREPAID_CARD: "PT"
 
     ,PREPAID_USAGE: "PU"
+
+    ,PREPAID_PLAN: "PM"
 
   },
 

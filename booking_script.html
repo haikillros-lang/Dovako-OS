@@ -1,5 +1,5 @@
 <script>
-  const bookingUi = { options: { customers: [], employees: [], services: [], beds: [] }, availability: null, prepaidCards: [], timer: null };
+  const bookingUi = { options: { customers: [], employees: [], services: [], beds: [] }, availability: null, prepaidCards: [], timer: null, customerResults: [], customerSearchTimer: null };
 
   function loadBookingScreen() {
     apiCall('getBookingOptions', [], function (options) {
@@ -12,7 +12,6 @@
 
   function renderBookingOptions() {
     const options = bookingUi.options;
-    fillSelect('bookingCustomer', options.customers, 'CustomerID', function (item) { return item.FullName + ' · ' + item.Phone; });
     fillSelect('bookingEmployee', options.employees, 'EmployeeID', function (item) { return item.FullName + (item.Role ? ' · ' + item.Role : ''); });
     fillSelect('bookingService', options.services, 'ServiceID', function (item) { return item.ServiceName + ' · ' + app.currency(item.Price); });
     const bed = document.getElementById('bookingBed');
@@ -34,6 +33,44 @@
     select.value = current;
   }
 
+  function searchBookingCustomers() {
+    const input = document.getElementById('bookingCustomerSearch');
+    const query = input.value.trim();
+    const results = document.getElementById('bookingCustomerResults');
+    document.getElementById('bookingCustomer').value = '';
+    document.getElementById('bookingCustomerSelected').textContent = query ? 'Đang tìm khách...' : 'Nhập tên, SĐT hoặc mã khách để tìm.';
+    if (query.length < 2) {
+      results.classList.add('hidden');
+      document.getElementById('bookingCustomerSelected').textContent = 'Nhập tối thiểu 2 ký tự để tìm nhanh trong toàn bộ hồ sơ.';
+      return;
+    }
+    apiCall('searchCustomers', [query, { limit: 15 }], renderBookingCustomerResults, handleBookingError);
+  }
+
+  function renderBookingCustomerResults(customers) {
+    bookingUi.customerResults = customers || [];
+    const results = document.getElementById('bookingCustomerResults');
+    if (!bookingUi.customerResults.length) {
+      results.innerHTML = '<div class="customer-picker-empty">Không tìm thấy khách phù hợp.</div>';
+      results.classList.remove('hidden');
+      return;
+    }
+    results.innerHTML = bookingUi.customerResults.map(function (customer, index) {
+      return '<button type="button" class="customer-picker-item" onclick="selectBookingCustomerByIndex(' + index + ')"><strong>' + app.escape(customer.FullName) + '</strong><small>' + app.escape(customer.Phone) + ' · ' + app.escape(customer.CustomerID) + '</small></button>';
+    }).join('');
+    results.classList.remove('hidden');
+  }
+
+  function selectBookingCustomerByIndex(index) {
+    const customer = bookingUi.customerResults[index];
+    if (!customer) return;
+    document.getElementById('bookingCustomer').value = customer.CustomerID;
+    document.getElementById('bookingCustomerSearch').value = customer.FullName + ' · ' + customer.Phone;
+    document.getElementById('bookingCustomerSelected').textContent = 'Đã chọn: ' + customer.FullName + ' · ' + customer.Phone + ' · ' + customer.CustomerID;
+    document.getElementById('bookingCustomerResults').classList.add('hidden');
+    loadBookingPrepaid();
+  }
+
   function loadBookings() {
     const date = document.getElementById('bookingFilterDate').value;
     document.getElementById('bookingList').innerHTML = '<div class="empty-state">Đang tải...</div>';
@@ -51,14 +88,17 @@
     }
     notice.classList.remove('hidden');
     notice.textContent = 'Đang kiểm tra thẻ trả trước...';
-    apiCall('getAvailablePrepaidCards', [customerId, serviceId], function (cards) {
+    const amount = Number(document.getElementById('bookingFinalPrice').value || document.getElementById('bookingPrice').value || 0);
+    apiCall('getAvailablePrepaidCards', [customerId, serviceId, amount], function (cards) {
       bookingUi.prepaidCards = cards || [];
       if (!bookingUi.prepaidCards.length) {
         notice.classList.add('hidden');
         return;
       }
       const card = bookingUi.prepaidCards[0];
-      notice.textContent = 'Khách có thẻ ' + card.CardID + ' còn ' + card.RemainingSessions + ' buổi. Khi booking hoàn thành, hệ thống sẽ tự trừ 1 buổi.';
+      notice.textContent = String(card.CardMode || '').toLowerCase() === 'value'
+        ? 'Khách có thẻ ' + card.CardID + ' còn ' + app.currency(card.RemainingValue) + '. Khi booking hoàn thành, hệ thống sẽ tự trừ ' + app.currency(amount) + '.'
+        : 'Khách có thẻ ' + card.CardID + ' còn ' + card.RemainingSessions + ' buổi. Khi booking hoàn thành, hệ thống sẽ tự trừ 1 buổi.';
     }, function () {
       bookingUi.prepaidCards = [];
       notice.classList.add('hidden');
@@ -153,7 +193,9 @@
     apiCall(call, action === 'cancel' ? [id, note] : [id], function (result) {
       const prepaid = result && result.Prepaid;
       const message = action === 'complete' && prepaid && prepaid.used
-        ? 'Đã hoàn thành và trừ thẻ ' + prepaid.cardId + (prepaid.remainingSessions === null ? '' : '. Còn ' + prepaid.remainingSessions + ' buổi.')
+        ? 'Đã hoàn thành và trừ thẻ ' + prepaid.cardId + (prepaid.cardMode === 'Value'
+          ? '. Còn ' + app.currency(prepaid.remainingValue) + '.'
+          : (prepaid.remainingSessions === null ? '' : '. Còn ' + prepaid.remainingSessions + ' buổi.'))
         : 'Đã cập nhật trạng thái booking.';
       app.toast(message);
       loadBookings(); loadBookingAvailability(); app.loadDashboard();
@@ -192,13 +234,14 @@
       const data = Object.fromEntries(new FormData(event.currentTarget).entries());
       const button = document.getElementById('saveBookingButton'); button.disabled = true;
       apiCall('createBooking', [data], function () {
-        app.toast('Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; document.getElementById('bookingPrepaidNotice').classList.add('hidden'); bookingRecalculate(); loadBookings(); loadBookingAvailability(); app.loadDashboard(); button.disabled = false;
+        app.toast('Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; document.getElementById('bookingCustomerSearch').value = ''; document.getElementById('bookingCustomer').value = ''; document.getElementById('bookingCustomerSelected').textContent = 'Chưa chọn khách hàng.'; document.getElementById('bookingPrepaidNotice').classList.add('hidden'); bookingRecalculate(); loadBookings(); loadBookingAvailability(); app.loadDashboard(); button.disabled = false;
       }, function (error) { button.disabled = false; handleBookingError(error); });
     });
     document.getElementById('bookingService').addEventListener('change', bookingUseService);
-    document.getElementById('bookingCustomer').addEventListener('change', loadBookingPrepaid);
-    document.getElementById('bookingPrice').addEventListener('input', bookingRecalculate);
-    document.getElementById('bookingDiscount').addEventListener('input', bookingRecalculate);
+    document.getElementById('bookingCustomerSearch').addEventListener('input', function () { window.clearTimeout(bookingUi.customerSearchTimer); bookingUi.customerSearchTimer = window.setTimeout(searchBookingCustomers, 250); });
+    document.getElementById('bookingCustomerSearch').addEventListener('focus', function () { if (this.value.trim().length >= 2 && !document.getElementById('bookingCustomer').value) searchBookingCustomers(); });
+    document.getElementById('bookingPrice').addEventListener('input', function () { bookingRecalculate(); loadBookingPrepaid(); });
+    document.getElementById('bookingDiscount').addEventListener('input', function () { bookingRecalculate(); loadBookingPrepaid(); });
     document.getElementById('bookingFilterDate').addEventListener('change', loadBookings);
     document.getElementById('bookingDate').addEventListener('change', function () { document.getElementById('bookingFilterDate').value = this.value; loadBookings(); loadBookingAvailability(); });
     document.getElementById('bookingStart').addEventListener('change', loadBookingAvailability);
