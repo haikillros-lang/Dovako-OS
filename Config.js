@@ -74,7 +74,9 @@ const CONFIG = Object.freeze({
 
     USERS: "USERS",
 
-    NOTICES: "NOTICES"
+    NOTICES: "NOTICES",
+
+    LEAVE_SCHEDULES: "LEAVE_SCHEDULES"
 
   },
 
@@ -211,6 +213,8 @@ const CONFIG = Object.freeze({
     FILE: "FL",
 
     NOTICE: "TB",
+
+    LEAVE: "NP",
 
     PREPAID_CARD: "PT"
 

@@ -28,6 +28,7 @@
       list.innerHTML = '<div class="empty-state">Không tải được nội dung.</div>';
       app.toast(error && error.message ? error.message : 'Không tải được bảng thông báo.', 'error');
     });
+    if (typeof loadLeaveSchedules === 'function') loadLeaveSchedules();
   }
 
   function renderNotices(items) {
@@ -113,6 +114,135 @@
     if (search) search.addEventListener('input', function () {
       window.clearTimeout(noticeUi.searchTimer);
       noticeUi.searchTimer = window.setTimeout(loadNotices, 250);
+    });
+  });
+</script>
+<script>
+  const leaveUi = { items: [], employees: [], editingId: null, employeesLoaded: false, searchTimer: null };
+
+  function leaveCanManage() { return noticeCanManage(); }
+  function leaveDateInput(value) { return value ? String(value).slice(0, 10) : ''; }
+  function leaveDateLabel(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+  }
+
+  function loadLeaveSchedules() {
+    const list = document.getElementById('leaveList');
+    if (!list) return;
+    list.innerHTML = '<div class="empty-state">Đang tải lịch nghỉ...</div>';
+    const options = {
+      month: document.getElementById('leaveMonth').value,
+      Status: leaveCanManage() ? document.getElementById('leaveStatusFilter').value : '',
+      query: document.getElementById('leaveSearch').value
+    };
+    apiCall('getLeaveSchedules', [options], renderLeaveSchedules, function (error) {
+      list.innerHTML = '<div class="empty-state">Không tải được lịch nghỉ.</div>';
+      app.toast(error && error.message ? error.message : 'Không tải được lịch nghỉ.', 'error');
+    });
+    if (leaveCanManage()) loadLeaveEmployees();
+  }
+
+  function loadLeaveEmployees() {
+    if (leaveUi.employeesLoaded) return;
+    apiCall('getEmployees', [false], function (employees) {
+      leaveUi.employees = employees || [];
+      leaveUi.employeesLoaded = true;
+      renderLeaveEmployeeOptions();
+    }, function (error) { app.toast(error.message || 'Không tải được danh sách nhân viên.', 'error'); });
+  }
+
+  function renderLeaveEmployeeOptions() {
+    const select = document.querySelector('#leaveForm select[name="EmployeeID"]');
+    if (!select) return;
+    const selected = select.value;
+    select.innerHTML = '<option value="">Chọn nhân viên</option>' + leaveUi.employees.map(function (employee) {
+      return '<option value="' + app.escape(employee.EmployeeID) + '">' + app.escape(employee.FullName) + ' · ' + app.escape(employee.Role || 'Nhân viên') + '</option>';
+    }).join('');
+    select.value = selected;
+  }
+
+  function renderLeaveSchedules(items) {
+    leaveUi.items = items || [];
+    const canManage = leaveCanManage();
+    document.getElementById('leaveListSummary').textContent = leaveUi.items.length + ' lịch nghỉ' + (canManage ? ' đang quản lý' : ' đã công bố');
+    document.getElementById('leaveList').innerHTML = leaveUi.items.length ? leaveUi.items.map(function (item) {
+      const range = leaveDateLabel(item.StartDate) + (leaveDateInput(item.StartDate) !== leaveDateInput(item.EndDate) ? ' – ' + leaveDateLabel(item.EndDate) : '');
+      const actions = canManage ? '<div class="notice-actions"><button class="text-button" type="button" onclick="editLeaveUi(\'' + app.escape(item.LeaveID) + '\')">Sửa</button>' + (item.Status !== 'Lưu trữ' ? '<button class="icon-button danger" type="button" onclick="archiveLeaveUi(\'' + app.escape(item.LeaveID) + '\')">Lưu trữ</button>' : '') + '</div>' : '';
+      return '<article class="leave-item' + (item.Status === 'Lưu trữ' ? ' leave-archived' : '') + '">' +
+        '<div class="leave-item-head"><div><h3>' + app.escape(item.EmployeeName) + '</h3><p>' + app.escape(range) + '</p></div><span class="status-chip' + (item.Status === 'Lưu trữ' ? ' inactive' : item.Status === 'Nháp' ? ' danger' : '') + '">' + app.escape(item.Status) + '</span></div>' +
+        '<p class="notice-content">' + app.escape(item.Reason).replace(/\n/g, '<br>') + '</p>' +
+        '<div class="notice-item-foot"><span>Mã lịch: ' + app.escape(item.LeaveID) + '</span><span>Cập nhật: ' + app.escape(leaveDateLabel(item.UpdatedDate)) + (item.UpdatedBy ? ' · ' + app.escape(item.UpdatedBy) : '') + '</span></div>' + actions +
+        '</article>';
+    }).join('') : '<div class="empty-state">Không có lịch nghỉ phù hợp.</div>';
+  }
+
+  function editLeaveUi(id) {
+    const item = leaveUi.items.find(function (value) { return value.LeaveID === id; });
+    if (!item) { app.toast('Không tìm thấy lịch nghỉ cần sửa.', 'error'); return; }
+    const form = document.getElementById('leaveForm');
+    leaveUi.editingId = id;
+    form.elements.EmployeeID.value = item.EmployeeID || '';
+    form.elements.StartDate.value = leaveDateInput(item.StartDate);
+    form.elements.EndDate.value = leaveDateInput(item.EndDate);
+    form.elements.Status.value = item.Status || 'Đã đăng';
+    form.elements.Reason.value = item.Reason || '';
+    document.getElementById('leaveEditorTitle').textContent = 'Cập nhật lịch nghỉ ' + id;
+    document.getElementById('saveLeaveButton').textContent = 'Lưu thay đổi';
+    document.getElementById('cancelLeaveEditButton').classList.remove('hidden');
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function cancelLeaveEditUi() {
+    leaveUi.editingId = null;
+    const form = document.getElementById('leaveForm');
+    form.reset();
+    const today = new Date().toISOString().slice(0, 10);
+    form.elements.StartDate.value = today;
+    form.elements.EndDate.value = today;
+    form.elements.Status.value = 'Đã đăng';
+    document.getElementById('leaveEditorTitle').textContent = 'Cập nhật lịch nghỉ nhân viên';
+    document.getElementById('saveLeaveButton').textContent = 'Đăng lịch nghỉ';
+    document.getElementById('cancelLeaveEditButton').classList.add('hidden');
+  }
+
+  function archiveLeaveUi(id) {
+    if (!window.confirm('Lưu trữ lịch nghỉ này? Nhân viên sẽ không còn thấy lịch trên bảng thông báo.')) return;
+    apiCall('archiveLeaveSchedule', [id], function () {
+      app.toast('Đã lưu trữ lịch nghỉ.');
+      if (leaveUi.editingId === id) cancelLeaveEditUi();
+      loadLeaveSchedules();
+    }, function (error) { app.toast(error.message || 'Không thể lưu trữ lịch nghỉ.', 'error'); });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('leaveForm');
+    const month = document.getElementById('leaveMonth');
+    if (month) month.value = new Date().toISOString().slice(0, 7);
+    if (form) {
+      cancelLeaveEditUi();
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(form).entries());
+        const button = document.getElementById('saveLeaveButton');
+        button.disabled = true;
+        const editingId = leaveUi.editingId;
+        apiCall(editingId ? 'updateLeaveSchedule' : 'createLeaveSchedule', editingId ? [editingId, data] : [data], function () {
+          button.disabled = false;
+          app.toast(editingId ? 'Đã cập nhật lịch nghỉ.' : 'Đã đăng lịch nghỉ.');
+          cancelLeaveEditUi();
+          loadLeaveSchedules();
+        }, function (error) {
+          button.disabled = false;
+          app.toast(error.message || 'Không thể lưu lịch nghỉ.', 'error');
+        });
+      });
+    }
+    const search = document.getElementById('leaveSearch');
+    if (search) search.addEventListener('input', function () {
+      window.clearTimeout(leaveUi.searchTimer);
+      leaveUi.searchTimer = window.setTimeout(loadLeaveSchedules, 250);
     });
   });
 </script>

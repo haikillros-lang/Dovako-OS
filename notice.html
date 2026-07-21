@@ -18,3 +18,23 @@
     <div id="noticeList" class="notice-list" aria-live="polite"><div class="empty-state">Đang tải nội dung...</div></div>
   </section>
 </div>
+
+<div class="leave-schedule-layout">
+  <section class="panel leave-editor" data-roles="Admin,Manager">
+    <div class="panel-head compact"><div><h2 id="leaveEditorTitle">Cập nhật lịch nghỉ nhân viên</h2><p>Admin và Quản lý cập nhật; nhân viên chỉ được xem lịch đã đăng.</p></div></div>
+    <form id="leaveForm" class="notice-form">
+      <div class="form-grid">
+        <label class="form-field wide"><span>Nhân viên <b>*</b></span><select name="EmployeeID" required><option value="">Chọn nhân viên</option></select></label>
+        <label class="form-field"><span>Ngày bắt đầu <b>*</b></span><input name="StartDate" type="date" required></label>
+        <label class="form-field"><span>Ngày kết thúc <b>*</b></span><input name="EndDate" type="date" required></label>
+        <label class="form-field"><span>Trạng thái <b>*</b></span><select name="Status" required><option value="Đã đăng">Đã đăng</option><option value="Nháp">Nháp</option></select></label>
+        <label class="form-field wide"><span>Ghi chú <b>*</b></span><textarea name="Reason" rows="5" maxlength="1000" required placeholder="Ví dụ: Nghỉ phép năm, nghỉ việc riêng..."></textarea></label>
+        <div class="form-actions wide notice-form-actions"><button id="saveLeaveButton" class="button primary" type="submit">Đăng lịch nghỉ</button><button id="cancelLeaveEditButton" class="button secondary hidden" type="button" onclick="cancelLeaveEditUi()">Hủy sửa</button></div>
+      </div>
+    </form>
+  </section>
+  <section class="panel leave-list-panel">
+    <div class="panel-head"><div><h2>Lịch nghỉ nhân viên</h2><p id="leaveListSummary">Đang tải lịch nghỉ...</p></div><div class="notice-filters"><input id="leaveMonth" type="month" aria-label="Chọn tháng" onchange="loadLeaveSchedules()"><select id="leaveStatusFilter" data-roles="Admin,Manager" aria-label="Lọc trạng thái" onchange="loadLeaveSchedules()"><option value="">Mọi trạng thái</option><option value="Đã đăng">Đã đăng</option><option value="Nháp">Nháp</option><option value="Lưu trữ">Lưu trữ</option></select><input id="leaveSearch" class="panel-search" type="search" placeholder="Tìm nhân viên hoặc ghi chú" aria-label="Tìm lịch nghỉ"></div></div>
+    <div id="leaveList" class="leave-list" aria-live="polite"><div class="empty-state">Đang tải lịch nghỉ...</div></div>
+  </section>
+</div>
