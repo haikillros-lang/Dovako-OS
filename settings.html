@@ -11,7 +11,11 @@
     <form id="userForm" class="user-form"><input name="FullName" required placeholder="Họ và tên"><input name="Username" required placeholder="Tên đăng nhập"><input id="userPassword" name="Password" type="password" minlength="8" placeholder="Mật khẩu (từ 8 ký tự)"><select name="Role" required><option value="Reception">Lễ tân</option><option value="Technician">Kỹ thuật viên</option><option value="Manager">Quản lý</option><option value="Admin">Admin</option></select><select id="userEmployee" name="EmployeeID"><option value="">Không liên kết nhân viên</option></select><button id="saveUserButton" class="button primary">Tạo tài khoản</button><button id="cancelUserEditButton" class="button secondary hidden" type="button" onclick="cancelUserEditUi()">Hủy</button></form>
     <div id="userList" class="catalog-list"></div>
   </section>
-  <section class="panel account-panel" data-roles="Admin"><div class="panel-head compact"><div><h2>Quản trị dữ liệu khách hàng</h2><p>Đã tắt chức năng nhập dữ liệu khách cũ.</p></div><button type="button" class="button danger" onclick="purgeCustomerDataUi()">Xóa dữ liệu khách hàng</button></div>
-    <div class="empty-state">Chỉ Admin được sử dụng. Khi xác nhận, hệ thống xóa toàn bộ khách hàng, booking, thẻ trả trước và liên kết file; không xóa tài khoản, nhân viên, dịch vụ hoặc ảnh gốc trên Google Drive.</div>
+  <section class="panel account-panel" data-roles="Admin"><div class="panel-head compact"><div><h2>Quản trị từng hồ sơ khách hàng</h2><p>Tìm và xóa đúng một khách hàng; đã tắt chức năng nhập dữ liệu khách cũ và xóa hàng loạt trên giao diện.</p></div></div>
+    <div class="customer-delete-picker">
+      <label class="form-field"><span>Tìm khách cần xóa</span><input id="customerDeleteSearch" type="search" autocomplete="off" placeholder="Nhập tên, SĐT hoặc mã khách (ít nhất 2 ký tự)"></label>
+      <div id="customerDeleteResults" class="customer-picker-results hidden"></div>
+    </div>
+    <div id="customerDeletePreview" class="customer-delete-preview empty-state">Chưa chọn khách hàng. Dữ liệu xóa chỉ gồm hồ sơ đã chọn, booking, thẻ trả trước, lịch sử trừ thẻ và liên kết file của hồ sơ đó. Ảnh gốc trên Google Drive được giữ lại.</div>
   </section>
 </div>

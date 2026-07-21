@@ -132,6 +132,92 @@ class CustomerService {
     }
   }
 
+  /**
+   * Shows exactly what would be removed for one customer. A customer who is
+   * currently the card owner for another person's booking cannot be purged,
+   * because removing that owner would break the shared-card history.
+   */
+  static deletionPreview(customerId) {
+    this.initialize();
+    const customer = this.get(customerId);
+    if (!customer) throw new Error('Không tìm thấy khách hàng: ' + customerId);
+    const related = this.relatedOperationalRecords(customerId);
+    const sharedCardBookings = related.sharedCardBookings;
+    return {
+      customer: {
+        CustomerID: customer.CustomerID,
+        FullName: customer.FullName,
+        Phone: customer.Phone,
+        Status: customer.Status
+      },
+      bookings: related.bookings.length,
+      prepaidCards: related.prepaidCards.length,
+      prepaidUsage: related.prepaidUsage.length,
+      fileLinks: related.files.length,
+      sharedCardBookings: sharedCardBookings.length,
+      canDelete: sharedCardBookings.length === 0,
+      blockedReason: sharedCardBookings.length
+        ? 'Khách này đang là chủ thẻ cho ' + sharedCardBookings.length + ' booking của người thân. Hãy xử lý thẻ dùng chung trước khi xóa hồ sơ.'
+        : ''
+    };
+  }
+
+  /** Permanently removes one operational customer profile and its own links. */
+  static purgeOneOperationalCustomer(customerId) {
+    this.initialize();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const preview = this.deletionPreview(customerId);
+      if (!preview.canDelete) throw new Error(preview.blockedReason);
+      const related = this.relatedOperationalRecords(customerId);
+      const tables = CONFIG.SHEETS;
+
+      // Delete child records first so no operational table keeps an orphan ID.
+      Database.removeRecords(tables.PREPAID_USAGE, related.prepaidUsage);
+      Database.removeRecords(tables.FILES, related.files);
+      Database.removeRecords(tables.PREPAID_CARDS, related.prepaidCards);
+      Database.removeRecords(tables.BOOKINGS, related.bookings);
+      Database.remove(tables.CUSTOMERS, customerId, 'CustomerID');
+
+      const result = {
+        customer: preview.customer,
+        deletedCustomers: 1,
+        deletedBookings: related.bookings.length,
+        deletedPrepaidCards: related.prepaidCards.length,
+        deletedPrepaidUsage: related.prepaidUsage.length,
+        deletedFileLinks: related.files.length,
+        driveFilesRetained: true
+      };
+      this.audit('PURGE_ONE_OPERATIONAL_CUSTOMER', customerId, result);
+      return result;
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
+  static relatedOperationalRecords(customerId) {
+    const tables = CONFIG.SHEETS;
+    const bookings = Database.findAll(tables.BOOKINGS).filter(function (item) {
+      return String(item.CustomerID || '') === String(customerId);
+    });
+    const bookingIds = bookings.reduce(function (map, item) { map[item.BookingID] = true; return map; }, {});
+    const prepaidCards = Database.findAll(tables.PREPAID_CARDS).filter(function (item) {
+      return String(item.CustomerID || '') === String(customerId);
+    });
+    const cardIds = prepaidCards.reduce(function (map, item) { map[item.CardID] = true; return map; }, {});
+    const prepaidUsage = Database.findAll(tables.PREPAID_USAGE).filter(function (item) {
+      return String(item.CustomerID || '') === String(customerId) || Boolean(cardIds[item.CardID]) || Boolean(bookingIds[item.BookingID]);
+    });
+    const files = Database.findAll(tables.FILES).filter(function (item) {
+      return String(item.CustomerID || '') === String(customerId) || Boolean(bookingIds[item.BookingID]);
+    });
+    const sharedCardBookings = Database.findAll(tables.BOOKINGS).filter(function (item) {
+      return String(item.CardOwnerCustomerID || '') === String(customerId) && String(item.CustomerID || '') !== String(customerId);
+    });
+    return { bookings: bookings, prepaidCards: prepaidCards, prepaidUsage: prepaidUsage, files: files, sharedCardBookings: sharedCardBookings };
+  }
+
   static setStatus(customerId, status, action) {
     this.initialize();
     if (!this.get(customerId)) throw new Error('Không tìm thấy khách hàng: ' + customerId);
@@ -352,4 +438,20 @@ function purgeAllCustomerDataForAdmin(token, confirmationPhrase) {
     throw new Error('Nhập đúng cụm XOA DU LIEU KHACH HANG để xác nhận xóa dữ liệu.');
   }
   return Utils.toClient(CustomerService.purgeAllOperationalData());
+}
+function searchCustomerDeletionCandidates(token, query) {
+  AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);
+  return Utils.toClient(CustomerService.search(query, { includeInactive: true, limit: 12 }));
+}
+function getCustomerDeletionPreview(token, customerId) {
+  AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);
+  return Utils.toClient(CustomerService.deletionPreview(customerId));
+}
+function deleteCustomerForAdmin(token, customerId, confirmationPhrase) {
+  AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);
+  const customerIdValue = Validator.required(customerId, 'Mã khách hàng');
+  if (String(confirmationPhrase || '').trim() !== 'XOA KHACH ' + customerIdValue) {
+    throw new Error('Nhập đúng cụm XOA KHACH ' + customerIdValue + ' để xác nhận xóa hồ sơ.');
+  }
+  return Utils.toClient(CustomerService.purgeOneOperationalCustomer(customerIdValue));
 }

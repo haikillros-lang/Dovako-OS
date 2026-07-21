@@ -1,5 +1,5 @@
 <script>
-  const settingsUi = { editingUserId: null };
+  const settingsUi = { editingUserId: null, deletionCustomer: null, deletionSearchTimer: null };
 
   function loadSettings() {
     apiCall('getEmployees', [], renderEmployees, handleSettingsError);
@@ -8,13 +8,58 @@
       apiCall('getUsers', [], renderUsers, handleSettingsError);
     }
   }
-  function purgeCustomerDataUi() {
-    const warning = 'Thao tác này xóa toàn bộ khách hàng, booking, thẻ trả trước, lịch sử trừ thẻ và liên kết file. Ảnh gốc trên Google Drive vẫn được giữ lại. Không thể khôi phục dữ liệu trên hệ thống.';
-    if (!window.confirm(warning + '\n\nBạn có muốn tiếp tục?')) return;
-    const phrase = window.prompt('Nhập XOA DU LIEU KHACH HANG để xác nhận xóa vĩnh viễn:');
+  function searchCustomerDeletionCandidatesUi() {
+    const input = document.getElementById('customerDeleteSearch');
+    const results = document.getElementById('customerDeleteResults');
+    if (!input || !results) return;
+    const query = input.value.trim();
+    if (query.length < 2) {
+      results.classList.add('hidden');
+      results.innerHTML = '';
+      return;
+    }
+    results.classList.remove('hidden');
+    results.innerHTML = '<div class="customer-picker-empty">Đang tìm khách hàng...</div>';
+    apiCall('searchCustomerDeletionCandidates', [query], function (items) {
+      results.innerHTML = (items || []).length ? items.map(function (item) {
+        return '<button type="button" class="customer-picker-item" onclick="selectCustomerDeletionUi(\'' + app.escape(item.CustomerID) + '\')"><strong>' + app.escape(item.FullName) + '</strong><small>' + app.escape(item.Phone) + ' · ' + app.escape(item.CustomerID) + '</small></button>';
+      }).join('') : '<div class="customer-picker-empty">Không tìm thấy khách phù hợp.</div>';
+    }, function (error) {
+      results.innerHTML = '<div class="customer-picker-empty">Không tải được kết quả tìm kiếm.</div>';
+      handleSettingsError(error);
+    });
+  }
+  function selectCustomerDeletionUi(customerId) {
+    const results = document.getElementById('customerDeleteResults');
+    if (results) results.classList.add('hidden');
+    apiCall('getCustomerDeletionPreview', [customerId], renderCustomerDeletionPreviewUi, handleSettingsError);
+  }
+  function renderCustomerDeletionPreviewUi(preview) {
+    settingsUi.deletionCustomer = preview;
+    const box = document.getElementById('customerDeletePreview');
+    const customer = preview.customer || {};
+    const counts = '<ul class="delete-preview-counts"><li>' + Number(preview.bookings || 0) + ' booking</li><li>' + Number(preview.prepaidCards || 0) + ' thẻ trả trước</li><li>' + Number(preview.prepaidUsage || 0) + ' lịch sử trừ thẻ</li><li>' + Number(preview.fileLinks || 0) + ' liên kết file</li></ul>';
+    const blocked = !preview.canDelete;
+    box.className = 'customer-delete-preview' + (blocked ? ' blocked' : '');
+    box.innerHTML = '<div><strong>' + app.escape(customer.FullName) + '</strong><span>' + app.escape(customer.Phone) + ' · ' + app.escape(customer.CustomerID) + '</span></div>' + counts +
+      (blocked ? '<p class="delete-preview-warning">' + app.escape(preview.blockedReason) + '</p>' : '<p>Nhấn xóa để xóa vĩnh viễn dữ liệu hệ thống của riêng hồ sơ này. Ảnh gốc Google Drive vẫn được giữ lại.</p>') +
+      (blocked ? '' : '<button type="button" class="button danger" onclick="deleteSelectedCustomerUi()">Xóa hồ sơ đã chọn</button>');
+  }
+  function deleteSelectedCustomerUi() {
+    const preview = settingsUi.deletionCustomer;
+    if (!preview || !preview.canDelete || !preview.customer) { app.toast('Chọn hồ sơ hợp lệ trước khi xóa.', 'error'); return; }
+    const customer = preview.customer;
+    const warning = 'Bạn sắp xóa vĩnh viễn hồ sơ ' + customer.FullName + ' (' + customer.CustomerID + ') cùng dữ liệu liên quan. Không thể khôi phục trên hệ thống.';
+    if (!window.confirm(warning)) return;
+    const phrase = window.prompt('Nhập XOA KHACH ' + customer.CustomerID + ' để xác nhận:');
     if (phrase === null) return;
-    apiCall('purgeAllCustomerDataForAdmin', [phrase], function (result) {
-      app.toast('Đã xóa ' + result.deletedCustomers + ' khách, ' + result.deletedBookings + ' booking và ' + result.deletedPrepaidCards + ' thẻ.');
+    apiCall('deleteCustomerForAdmin', [customer.CustomerID, phrase], function (result) {
+      app.toast('Đã xóa hồ sơ ' + result.customer.FullName + ' và ' + result.deletedBookings + ' booking liên quan.');
+      settingsUi.deletionCustomer = null;
+      const box = document.getElementById('customerDeletePreview');
+      box.className = 'customer-delete-preview empty-state';
+      box.textContent = 'Đã xóa hồ sơ. Bạn có thể tìm khách khác để quản trị.';
+      document.getElementById('customerDeleteSearch').value = '';
       loadSettings();
     }, handleSettingsError);
   }
@@ -106,6 +151,11 @@
         app.toast(wasEditing ? 'Đã cập nhật tài khoản.' : 'Đã tạo tài khoản.');
         loadSettings();
       }, handleSettingsError);
+    });
+    const customerDeleteSearch = document.getElementById('customerDeleteSearch');
+    if (customerDeleteSearch) customerDeleteSearch.addEventListener('input', function () {
+      window.clearTimeout(settingsUi.deletionSearchTimer);
+      settingsUi.deletionSearchTimer = window.setTimeout(searchCustomerDeletionCandidatesUi, 250);
     });
   });
 </script>
