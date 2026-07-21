@@ -162,9 +162,10 @@ class BookingService {
       Status: CONFIG.BOOKING_STATUS.COMPLETED,
       UpdatedDate: new Date()
     };
-    // Revenue for prepaid cards is recorded on the purchase date. A session
-    // paid by card is therefore zero-priced here to prevent double counting.
-    if (prepaid.used) changes.FinalPrice = 0;
+    // Revenue already paid into a prepaid card was recorded on its purchase
+    // date.  If the card balance is insufficient, keep only the shortfall as
+    // this booking's revenue so it can be collected at check-out.
+    if (prepaid.used) changes.FinalPrice = Math.max(0, Number(prepaid.outstandingAmount || 0));
 
     const saved = Database.update(this.TABLE, bookingId, changes, 'BookingID');
     this.audit('STATUS_' + this.statusKey(CONFIG.BOOKING_STATUS.COMPLETED), bookingId, Object.assign(
@@ -379,9 +380,6 @@ class BookingService {
     if (PrepaidService.availableSessions(prepaidCustomerId, booking.ServiceID).length) return booking;
     const quote = PrepaidService.quoteForBooking(prepaidCustomerId, booking.ServiceID, booking.Price);
     if (!quote) {
-      if (booking.CardOwnerCustomerID) {
-        throw new Error('Chủ thẻ được chọn không còn thẻ phù hợp hoặc không đủ số dư cho dịch vụ này.');
-      }
       return booking;
     }
     if (String(quote.DiscountMode) !== 'PerSession') return booking;

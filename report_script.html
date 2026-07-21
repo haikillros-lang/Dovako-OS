@@ -11,6 +11,18 @@
     document.getElementById('reportSummary').innerHTML = '<div class="loading-card">Đang tải báo cáo...</div>';
     apiCall('getReport', [{ From: from.value, To: to.value }], renderReport, function (error) { app.toast(error && error.message ? error.message : 'Không thể tải báo cáo.', 'error'); });
   }
+  function loadMonthlyRevenue() {
+    const value = document.getElementById('reportMonth').value;
+    if (!value) { app.toast('Chọn tháng cần xem.', 'error'); return; }
+    document.getElementById('reportSummary').innerHTML = '<div class="loading-card">Đang tải doanh thu tháng...</div>';
+    apiCall('getMonthlyRevenue', [value], renderReport, function (error) { app.toast(error && error.message ? error.message : 'Không thể tải doanh thu tháng.', 'error'); });
+  }
+  function loadYearlyRevenue() {
+    const year = document.getElementById('reportYear').value;
+    if (!year) { app.toast('Chọn năm cần xem.', 'error'); return; }
+    document.getElementById('reportSummary').innerHTML = '<div class="loading-card">Đang tải doanh thu năm...</div>';
+    apiCall('getYearlyRevenue', [year], renderYearlyRevenue, function (error) { app.toast(error && error.message ? error.message : 'Không thể tải doanh thu năm.', 'error'); });
+  }
   function renderReport(report) {
     const summary = report.summary || {};
     const cards = [
@@ -23,5 +35,14 @@
     document.getElementById('reportServices').innerHTML = reportRows(report.byService, 'Chưa có booking hoàn thành.');
     document.getElementById('reportEmployees').innerHTML = reportRows(report.byEmployee, 'Chưa có booking hoàn thành.');
   }
-  document.addEventListener('DOMContentLoaded', function () { const now = new Date(); document.getElementById('reportFrom').value = reportDateValue(new Date(now.getFullYear(), now.getMonth(), 1)); document.getElementById('reportTo').value = reportDateValue(now); });
+  function renderYearlyRevenue(report) {
+    renderReport(Object.assign({}, report, { byService: [], byEmployee: [] }));
+    const rows = report.months || [];
+    document.getElementById('annualRevenueRows').innerHTML = rows.map(function (row) {
+      return '<tr><td><strong>' + app.escape(row.label) + '</strong></td><td>' + app.escape(row.completedBookings || 0) + '</td><td>' + app.currency(row.bookingRevenue || 0) + '</td><td>' + app.currency(row.prepaidRevenue || 0) + '</td><td><strong>' + app.currency(row.revenue || 0) + '</strong></td></tr>';
+    }).join('') || '<tr><td colspan="5" class="table-empty">Chưa có dữ liệu.</td></tr>';
+    document.getElementById('reportServices').innerHTML = reportRows([], 'Báo cáo năm đang hiển thị ở bảng doanh thu theo tháng.');
+    document.getElementById('reportEmployees').innerHTML = reportRows([], 'Báo cáo năm đang hiển thị ở bảng doanh thu theo tháng.');
+  }
+  document.addEventListener('DOMContentLoaded', function () { const now = new Date(); document.getElementById('reportFrom').value = reportDateValue(new Date(now.getFullYear(), now.getMonth(), 1)); document.getElementById('reportTo').value = reportDateValue(now); document.getElementById('reportMonth').value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0'); document.getElementById('reportYear').value = now.getFullYear(); });
 </script>

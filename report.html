@@ -3,6 +3,10 @@
     <div class="panel-head compact">
       <div><h2>Báo cáo doanh thu</h2><p>Gồm booking hoàn thành và tiền mua thẻ trả trước.</p></div>
       <div class="report-filter-fields">
+        <label>Theo tháng <input id="reportMonth" type="month"></label>
+        <button class="button secondary" type="button" onclick="loadMonthlyRevenue()">Xem tháng</button>
+        <label>Theo năm <input id="reportYear" type="number" min="2000" max="2100"></label>
+        <button class="button secondary" type="button" onclick="loadYearlyRevenue()">Xem năm</button>
         <label>Từ ngày <input id="reportFrom" type="date"></label>
         <label>Đến ngày <input id="reportTo" type="date"></label>
         <button class="button primary" type="button" onclick="loadReports()">Xem báo cáo</button>
@@ -10,6 +14,10 @@
     </div>
   </div>
   <div id="reportSummary" class="metric-grid"></div>
+  <section class="panel" id="annualRevenuePanel">
+    <div class="panel-head compact"><div><h2>Doanh thu theo tháng</h2><p>Chọn “Xem năm” để quản lý so sánh doanh thu từng tháng.</p></div></div>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Tháng</th><th>Booking hoàn thành</th><th>Doanh thu booking</th><th>Tiền bán thẻ</th><th>Tổng doanh thu</th></tr></thead><tbody id="annualRevenueRows"><tr><td colspan="5" class="table-empty">Chưa chọn năm báo cáo.</td></tr></tbody></table></div>
+  </section>
   <div class="report-tables">
     <section class="panel"><div class="panel-head compact"><div><h2>Theo dịch vụ</h2></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Dịch vụ</th><th>Số ca</th><th>Doanh thu</th></tr></thead><tbody id="reportServices"><tr><td colspan="3" class="table-empty">Chọn khoảng thời gian để xem báo cáo.</td></tr></tbody></table></div></section>
     <section class="panel"><div class="panel-head compact"><div><h2>Theo nhân viên</h2></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>Nhân viên</th><th>Số ca</th><th>Doanh thu</th></tr></thead><tbody id="reportEmployees"><tr><td colspan="3" class="table-empty">Chọn khoảng thời gian để xem báo cáo.</td></tr></tbody></table></div></section>

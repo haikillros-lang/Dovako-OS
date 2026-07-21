@@ -331,8 +331,9 @@ class PrepaidService {
   }
 
   /**
-   * Value cards usable for a booking. Per-session cards include a calculated
-   * discount and are only returned when their balance covers the net amount.
+   * Value cards with a positive balance that can contribute to a booking.
+   * A card may pay all or only part of the net booking amount.  The remaining
+   * amount is collected as cash/transfer when the booking is completed.
    */
   static availableValueForBooking(customerId, amount) {
     const price = Number(amount || 0);
@@ -345,7 +346,16 @@ class PrepaidService {
         return Object.assign({}, card, PrepaidService.quoteForValueCard(card, price));
       })
       .filter(function (card) {
-        return Number(card.RemainingValue || 0) >= Number(card.ChargeAmount || 0);
+        return Number(card.RemainingValue || 0) > 0;
+      })
+      .map(function (card) {
+        const charge = Number(card.ChargeAmount || 0);
+        const appliedValue = Math.min(Math.max(0, Number(card.RemainingValue || 0)), charge);
+        return Object.assign({}, card, {
+          AppliedValue: appliedValue,
+          OutstandingAmount: Math.max(0, charge - appliedValue),
+          IsPartialPayment: appliedValue < charge
+        });
       })
       .sort(this.sortOldestFirst);
   }
@@ -360,7 +370,11 @@ class PrepaidService {
       DiscountMode: card.DiscountMode,
       DiscountPercent: Number(card.DiscountPercent || 0),
       DiscountAmount: Number(card.SuggestedDiscount || 0),
-      ChargeAmount: Number(card.ChargeAmount || amount)
+      ChargeAmount: Number(card.ChargeAmount || amount),
+      AvailableValue: Number(card.RemainingValue || 0),
+      AppliedValue: Number(card.AppliedValue || 0),
+      OutstandingAmount: Number(card.OutstandingAmount || 0),
+      IsPartialPayment: Boolean(card.IsPartialPayment)
     };
   }
 
@@ -368,6 +382,69 @@ class PrepaidService {
   static availableForBooking(customerId, serviceId, amount) {
     return this.availableSessions(customerId, serviceId)
       .concat(this.availableValueForBooking(customerId, amount));
+  }
+
+  /**
+   * A single safe payment preview for the booking form.  It also reports an
+   * exhausted card so staff know that the service must be collected as an
+   * additional payment instead of silently treating it as a free booking.
+   */
+  static bookingPaymentPreview(customerId, serviceId, amount) {
+    this.initialize();
+    const price = Math.max(0, Number(amount || 0));
+    const sessionCard = this.availableSessions(customerId, serviceId)[0];
+    if (sessionCard) {
+      return {
+        HasCardHistory: true,
+        Usable: true,
+        CardID: sessionCard.CardID,
+        CardMode: 'Session',
+        RemainingSessions: Number(sessionCard.RemainingSessions || 0),
+        RemainingValue: 0,
+        ChargeAmount: 0,
+        AppliedValue: 0,
+        OutstandingAmount: 0,
+        SuggestedDiscount: 0,
+        IsPartialPayment: false
+      };
+    }
+
+    const valueCard = this.availableValueForBooking(customerId, price)[0];
+    if (valueCard) {
+      return {
+        HasCardHistory: true,
+        Usable: true,
+        CardID: valueCard.CardID,
+        CardMode: 'Value',
+        RemainingSessions: 0,
+        RemainingValue: Number(valueCard.RemainingValue || 0),
+        ChargeAmount: Number(valueCard.ChargeAmount || price),
+        AppliedValue: Number(valueCard.AppliedValue || 0),
+        OutstandingAmount: Number(valueCard.OutstandingAmount || 0),
+        SuggestedDiscount: Number(valueCard.SuggestedDiscount || 0),
+        DiscountMode: valueCard.DiscountMode || 'Upfront',
+        IsPartialPayment: Boolean(valueCard.IsPartialPayment)
+      };
+    }
+
+    const cards = this.list({ customerId: customerId, includeInactive: false });
+    const mostRecent = cards.sort(function (left, right) {
+      return new Date(right.PurchasedDate || 0).getTime() - new Date(left.PurchasedDate || 0).getTime();
+    })[0];
+    return {
+      HasCardHistory: Boolean(mostRecent),
+      Usable: false,
+      CardID: mostRecent ? mostRecent.CardID : '',
+      CardMode: mostRecent ? (mostRecent.CardMode || 'Value') : '',
+      RemainingSessions: mostRecent ? Number(mostRecent.RemainingSessions || 0) : 0,
+      RemainingValue: mostRecent ? Number(mostRecent.RemainingValue || 0) : 0,
+      ChargeAmount: price,
+      AppliedValue: 0,
+      OutstandingAmount: price,
+      SuggestedDiscount: 0,
+      IsPartialPayment: false,
+      IsExhausted: Boolean(mostRecent)
+    };
   }
 
   static warnings() {
@@ -393,7 +470,8 @@ class PrepaidService {
           cardMode: existing.UsageType || 'Session',
           remainingSessions: null,
           remainingValue: null,
-          deductedAmount: Number(existing.UsedValue || 0)
+          deductedAmount: Number(existing.UsedValue || 0),
+          outstandingAmount: 0
         };
       }
 
@@ -402,15 +480,14 @@ class PrepaidService {
       if (sessionCard) return this.consumeSessionCard(sessionCard, booking);
 
       const charge = Math.max(0, Number(booking.FinalPrice || 0));
-      const valueCard = this.availableValue(cardOwnerCustomerId, charge)[0];
+      const valueCard = this.availableValueForBooking(cardOwnerCustomerId, charge)[0];
       if (valueCard) return this.consumeValueCard(valueCard, booking, charge);
 
-      // An explicit family-card choice must never silently become a cash sale.
-      if (booking.CardOwnerCustomerID) {
-        throw new Error('Thẻ của người thân không còn đủ số dư hoặc số buổi cho booking này.');
-      }
-
-      return { used: false, alreadyApplied: false, cardId: '', cardMode: '', remainingSessions: null, remainingValue: null, deductedAmount: 0 };
+      return {
+        used: false, alreadyApplied: false, cardId: '', cardMode: '',
+        remainingSessions: null, remainingValue: null, deductedAmount: 0,
+        outstandingAmount: charge
+      };
     } finally {
       lock.releaseLock();
     }
@@ -440,11 +517,14 @@ class PrepaidService {
       bookingId: booking.BookingID, customerId: booking.CustomerID,
       cardOwnerCustomerId: card.CustomerID || this.bookingCardOwnerId(booking), remainingSessions: remaining
     });
-    return { used: true, alreadyApplied: false, cardId: card.CardID, cardMode: 'Session', remainingSessions: remaining, remainingValue: null, deductedAmount: 0 };
+    return { used: true, alreadyApplied: false, cardId: card.CardID, cardMode: 'Session', remainingSessions: remaining, remainingValue: null, deductedAmount: 0, outstandingAmount: 0 };
   }
 
   static consumeValueCard(card, booking, charge) {
-    const remaining = Math.max(0, Number(card.RemainingValue || 0) - charge);
+    const availableValue = Math.max(0, Number(card.RemainingValue || 0));
+    const deductedAmount = Math.min(availableValue, Math.max(0, Number(charge || 0)));
+    const outstandingAmount = Math.max(0, Number(charge || 0) - deductedAmount);
+    const remaining = Math.max(0, availableValue - deductedAmount);
     Database.insert(this.USAGE_TABLE, {
       UsageID: this.nextUsageId(),
       CardID: card.CardID,
@@ -455,10 +535,10 @@ class PrepaidService {
       UsedSessions: 0,
       CreatedDate: new Date(),
       UsageType: 'Value',
-      UsedValue: charge
+      UsedValue: deductedAmount
     });
     Database.update(this.CARD_TABLE, card.CardID, {
-      UsedValue: Number(card.UsedValue || 0) + charge,
+      UsedValue: Number(card.UsedValue || 0) + deductedAmount,
       RemainingValue: remaining,
       Status: this.statusForValue(remaining),
       UpdatedDate: new Date()
@@ -466,9 +546,13 @@ class PrepaidService {
     AppLogger.safe('AUDIT', 'PrepaidCard', 'CONSUME_VALUE', card.CardID, 'CONSUME prepaid value', {
       bookingId: booking.BookingID, customerId: booking.CustomerID,
       cardOwnerCustomerId: card.CustomerID || this.bookingCardOwnerId(booking),
-      deductedAmount: charge, remainingValue: remaining
+      deductedAmount: deductedAmount, outstandingAmount: outstandingAmount, remainingValue: remaining
     });
-    return { used: true, alreadyApplied: false, cardId: card.CardID, cardMode: 'Value', remainingSessions: null, remainingValue: remaining, deductedAmount: charge };
+    return {
+      used: true, alreadyApplied: false, cardId: card.CardID, cardMode: 'Value',
+      remainingSessions: null, remainingValue: remaining, deductedAmount: deductedAmount,
+      outstandingAmount: outstandingAmount
+    };
   }
 
   static revenueBetween(fromKey, toKey) {
@@ -559,6 +643,7 @@ function getPrepaidOptions(token) { AuthService.requireSession(token, [CONFIG.RO
 function getPrepaidCards(token, options) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.list(options)); }
 function getPrepaidPlans(token, includeInactive) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.plans(includeInactive)); }
 function getAvailablePrepaidCards(token, customerId, serviceId, amount) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.availableForBooking(customerId, serviceId, amount)); }
+function getPrepaidBookingPreview(token, customerId, serviceId, amount) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.bookingPaymentPreview(customerId, serviceId, amount)); }
 function createPrepaidCard(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.create(data)); }
 function updatePrepaidCardBonus(token, cardId, bonusSessions) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.updateBonus(cardId, bonusSessions)); }
 function createPrepaidPlan(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(PrepaidService.createPlan(data)); }

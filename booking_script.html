@@ -181,27 +181,32 @@
     notice.classList.remove('hidden');
     notice.textContent = 'Đang kiểm tra thẻ trả trước...';
     const amount = Number(document.getElementById('bookingPrice').value || 0);
-    apiCall('getAvailablePrepaidCards', [prepaidCustomerId, serviceId, amount], function (cards) {
-      bookingUi.prepaidCards = cards || [];
-      if (!bookingUi.prepaidCards.length) {
+    apiCall('getPrepaidBookingPreview', [prepaidCustomerId, serviceId, amount], function (preview) {
+      bookingUi.prepaidCards = preview && preview.Usable ? [preview] : [];
+      if (!preview || !preview.Usable) {
         clearAutomaticBookingDiscount();
-        if (usesFamilyCard) {
-          notice.textContent = 'Chủ thẻ ' + bookingCardOwnerLabel() + ' không còn thẻ phù hợp hoặc không đủ số dư cho dịch vụ này.';
+        if ((preview && preview.HasCardHistory) || usesFamilyCard) {
+          const subject = usesFamilyCard ? 'Thẻ của ' + bookingCardOwnerLabel() : 'Thẻ trả trước của khách';
+          notice.textContent = subject + ' đã hết số dư/số buổi. Booking này không dùng được thẻ; cần thu thêm ' + app.currency(Number((preview && preview.OutstandingAmount) || amount)) + '.';
           notice.classList.remove('hidden');
         } else {
           notice.classList.add('hidden');
         }
         return;
       }
-      const card = bookingUi.prepaidCards[0];
+      const card = preview;
       const subject = usesFamilyCard ? 'Thẻ ' + card.CardID + ' của ' + bookingCardOwnerLabel() : 'Khách có thẻ ' + card.CardID;
       if (String(card.CardMode || '').toLowerCase() === 'value') {
         const suggested = Number(card.SuggestedDiscount || 0);
         applyAutomaticBookingDiscount(suggested);
         const charge = Number(card.ChargeAmount || amount);
-        notice.textContent = suggested > 0
-          ? subject + ' giảm ' + app.currency(suggested) + ' cho buổi này. Khi hoàn thành sẽ trừ ' + app.currency(charge) + ', còn lại ' + app.currency(card.RemainingValue) + '.'
-          : subject + ' còn ' + app.currency(card.RemainingValue) + '. Khi booking hoàn thành, hệ thống sẽ tự trừ ' + app.currency(charge) + '.';
+        const applied = Number(card.AppliedValue || 0);
+        const outstanding = Number(card.OutstandingAmount || 0);
+        notice.textContent = outstanding > 0
+          ? subject + ' còn ' + app.currency(card.RemainingValue) + '. Khi hoàn thành sẽ trừ hết ' + app.currency(applied) + ' từ thẻ và cần thu thêm ' + app.currency(outstanding) + '.'
+          : (suggested > 0
+            ? subject + ' giảm ' + app.currency(suggested) + ' cho buổi này. Khi hoàn thành sẽ trừ ' + app.currency(charge) + ', còn lại ' + app.currency(Math.max(0, Number(card.RemainingValue || 0) - applied)) + '.'
+            : subject + ' còn ' + app.currency(card.RemainingValue) + '. Khi booking hoàn thành, hệ thống sẽ tự trừ ' + app.currency(charge) + '.');
       } else {
         clearAutomaticBookingDiscount();
         notice.textContent = subject + ' còn ' + card.RemainingSessions + ' buổi. Khi booking hoàn thành, hệ thống sẽ tự trừ 1 buổi.';
