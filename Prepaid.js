@@ -25,7 +25,7 @@ class PrepaidService {
   static get USAGE_HEADERS() {
     return [
       'UsageID', 'CardID', 'BookingID', 'CustomerID', 'ServiceID',
-      'UsedSessions', 'CreatedDate', 'UsageType', 'UsedValue'
+      'UsedSessions', 'CreatedDate', 'UsageType', 'UsedValue', 'CardOwnerCustomerID'
     ];
   }
 
@@ -397,12 +397,18 @@ class PrepaidService {
         };
       }
 
-      const sessionCard = this.availableSessions(booking.CustomerID, booking.ServiceID)[0];
+      const cardOwnerCustomerId = this.bookingCardOwnerId(booking);
+      const sessionCard = this.availableSessions(cardOwnerCustomerId, booking.ServiceID)[0];
       if (sessionCard) return this.consumeSessionCard(sessionCard, booking);
 
       const charge = Math.max(0, Number(booking.FinalPrice || 0));
-      const valueCard = this.availableValue(booking.CustomerID, charge)[0];
+      const valueCard = this.availableValue(cardOwnerCustomerId, charge)[0];
       if (valueCard) return this.consumeValueCard(valueCard, booking, charge);
+
+      // An explicit family-card choice must never silently become a cash sale.
+      if (booking.CardOwnerCustomerID) {
+        throw new Error('Thẻ của người thân không còn đủ số dư hoặc số buổi cho booking này.');
+      }
 
       return { used: false, alreadyApplied: false, cardId: '', cardMode: '', remainingSessions: null, remainingValue: null, deductedAmount: 0 };
     } finally {
@@ -417,6 +423,7 @@ class PrepaidService {
       CardID: card.CardID,
       BookingID: booking.BookingID,
       CustomerID: booking.CustomerID,
+      CardOwnerCustomerID: card.CustomerID || this.bookingCardOwnerId(booking),
       ServiceID: booking.ServiceID,
       UsedSessions: 1,
       CreatedDate: new Date(),
@@ -430,7 +437,8 @@ class PrepaidService {
       UpdatedDate: new Date()
     }, 'CardID');
     AppLogger.safe('AUDIT', 'PrepaidCard', 'CONSUME_SESSION', card.CardID, 'CONSUME prepaid session', {
-      bookingId: booking.BookingID, remainingSessions: remaining
+      bookingId: booking.BookingID, customerId: booking.CustomerID,
+      cardOwnerCustomerId: card.CustomerID || this.bookingCardOwnerId(booking), remainingSessions: remaining
     });
     return { used: true, alreadyApplied: false, cardId: card.CardID, cardMode: 'Session', remainingSessions: remaining, remainingValue: null, deductedAmount: 0 };
   }
@@ -442,6 +450,7 @@ class PrepaidService {
       CardID: card.CardID,
       BookingID: booking.BookingID,
       CustomerID: booking.CustomerID,
+      CardOwnerCustomerID: card.CustomerID || this.bookingCardOwnerId(booking),
       ServiceID: booking.ServiceID,
       UsedSessions: 0,
       CreatedDate: new Date(),
@@ -455,7 +464,9 @@ class PrepaidService {
       UpdatedDate: new Date()
     }, 'CardID');
     AppLogger.safe('AUDIT', 'PrepaidCard', 'CONSUME_VALUE', card.CardID, 'CONSUME prepaid value', {
-      bookingId: booking.BookingID, deductedAmount: charge, remainingValue: remaining
+      bookingId: booking.BookingID, customerId: booking.CustomerID,
+      cardOwnerCustomerId: card.CustomerID || this.bookingCardOwnerId(booking),
+      deductedAmount: charge, remainingValue: remaining
     });
     return { used: true, alreadyApplied: false, cardId: card.CardID, cardMode: 'Value', remainingSessions: null, remainingValue: remaining, deductedAmount: charge };
   }
@@ -477,6 +488,10 @@ class PrepaidService {
 
   static isValueCard(card) {
     return String(card.CardMode || '').trim().toLowerCase() === 'value';
+  }
+
+  static bookingCardOwnerId(booking) {
+    return String((booking && booking.CardOwnerCustomerID) || (booking && booking.CustomerID) || '').trim();
   }
 
   static isSessionCard(card) { return !this.isValueCard(card); }

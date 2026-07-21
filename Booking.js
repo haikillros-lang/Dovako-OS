@@ -10,12 +10,13 @@ class BookingService {
     return [
       'BookingID', 'CustomerID', 'EmployeeID', 'ServiceID', 'BedID',
       'BookingDate', 'StartTime', 'EndTime', 'Status', 'Price', 'Discount',
-      'FinalPrice', 'Note', 'CreatedDate', 'UpdatedDate'
+      'FinalPrice', 'Note', 'CreatedDate', 'UpdatedDate', 'CardOwnerCustomerID'
     ];
   }
 
   static initialize() {
-    Database.ensureTable(this.TABLE, this.HEADERS);
+    // Add new fields without changing any booking already recorded.
+    Database.ensureColumns(this.TABLE, this.HEADERS);
     this.ensureVietnamTimezone();
     return { sheet: this.TABLE, headers: this.HEADERS.slice() };
   }
@@ -106,6 +107,7 @@ class BookingService {
     this.initialize();
     const booking = this.normalizeForCreate(input);
     this.assertCustomerAvailable(booking.CustomerID);
+    this.assertCardOwnerAvailable(booking.CardOwnerCustomerID);
     this.assertNoConflict(booking);
 
     const saved = Database.insertWithGeneratedId(this.TABLE, CONFIG.PREFIX.BOOKING, booking, {
@@ -131,6 +133,7 @@ class BookingService {
 
     const updated = this.normalizeForUpdate(Object.assign({}, current, this.pickEditableFields(changes)), current);
     this.assertCustomerAvailable(updated.CustomerID);
+    this.assertCardOwnerAvailable(updated.CardOwnerCustomerID);
     this.assertNoConflict(updated, bookingId);
     const saved = Database.update(this.TABLE, bookingId, updated, 'BookingID');
     this.audit('UPDATE', bookingId, { changedFields: Object.keys(this.pickEditableFields(changes)) });
@@ -198,6 +201,7 @@ class BookingService {
     const core = Validator.booking(Object.assign({}, data, {
       Status: CONFIG.BOOKING_STATUS.PENDING_CONFIRMATION
     }));
+    core.CardOwnerCustomerID = this.normalizeCardOwnerId(data.CardOwnerCustomerID, core.CustomerID);
     this.applyPrepaidDiscount(core);
     this.assertPrice(core);
     const now = new Date();
@@ -206,6 +210,8 @@ class BookingService {
 
   static normalizeForUpdate(data, current) {
     const core = Validator.booking(Object.assign({}, data, { Status: current.Status }));
+    core.CardOwnerCustomerID = this.normalizeCardOwnerId(data.CardOwnerCustomerID, core.CustomerID);
+    this.applyPrepaidDiscount(core);
     this.assertPrice(core);
     return Object.assign(core, { CreatedDate: current.CreatedDate, UpdatedDate: new Date() });
   }
@@ -213,7 +219,8 @@ class BookingService {
   static pickEditableFields(input) {
     const allowed = [
       'CustomerID', 'EmployeeID', 'ServiceID', 'BedID', 'BookingDate',
-      'StartTime', 'EndTime', 'Price', 'Discount', 'FinalPrice', 'Note'
+      'StartTime', 'EndTime', 'Price', 'Discount', 'FinalPrice', 'Note',
+      'CardOwnerCustomerID'
     ];
     return allowed.reduce(function (result, key) {
       if (Object.prototype.hasOwnProperty.call(input, key)) result[key] = input[key];
@@ -228,6 +235,21 @@ class BookingService {
     if (customer.Status === CONFIG.CUSTOMER_STATUS.INACTIVE || customer.Status === CONFIG.CUSTOMER_STATUS.BLACKLIST) {
       throw new Error('Khách hàng hiện không thể đặt lịch.');
     }
+  }
+
+  /** A blank owner means the service user is also the owner of the card. */
+  static normalizeCardOwnerId(value, customerId) {
+    const ownerId = value === null || value === undefined ? '' : String(value).trim();
+    return ownerId && ownerId !== String(customerId) ? Validator.required(ownerId, 'Mã chủ thẻ') : '';
+  }
+
+  static prepaidCustomerId(booking) {
+    return String((booking && booking.CardOwnerCustomerID) || (booking && booking.CustomerID) || '').trim();
+  }
+
+  static assertCardOwnerAvailable(cardOwnerCustomerId) {
+    if (!cardOwnerCustomerId) return;
+    this.assertCustomerAvailable(cardOwnerCustomerId);
   }
 
   static assertNoConflict(candidate, excludedBookingId) {
@@ -351,11 +373,18 @@ class BookingService {
    */
   static applyPrepaidDiscount(booking) {
     if (typeof PrepaidService === 'undefined') return booking;
+    const prepaidCustomerId = this.prepaidCustomerId(booking);
     // A complimentary legacy session takes priority and is free at completion;
     // do not also attach a value-card discount to the same booking.
-    if (PrepaidService.availableSessions(booking.CustomerID, booking.ServiceID).length) return booking;
-    const quote = PrepaidService.quoteForBooking(booking.CustomerID, booking.ServiceID, booking.Price);
-    if (!quote || String(quote.DiscountMode) !== 'PerSession') return booking;
+    if (PrepaidService.availableSessions(prepaidCustomerId, booking.ServiceID).length) return booking;
+    const quote = PrepaidService.quoteForBooking(prepaidCustomerId, booking.ServiceID, booking.Price);
+    if (!quote) {
+      if (booking.CardOwnerCustomerID) {
+        throw new Error('Chủ thẻ được chọn không còn thẻ phù hợp hoặc không đủ số dư cho dịch vụ này.');
+      }
+      return booking;
+    }
+    if (String(quote.DiscountMode) !== 'PerSession') return booking;
 
     const automaticDiscount = Number(quote.DiscountAmount || 0);
     if (automaticDiscount <= 0) return booking;
@@ -402,6 +431,7 @@ class BookingService {
   static auditMetadata(booking) {
     return {
       customerId: booking.CustomerID,
+      cardOwnerCustomerId: booking.CardOwnerCustomerID || booking.CustomerID,
       employeeId: booking.EmployeeID,
       bookingDate: booking.BookingDate,
       startTime: booking.StartTime,

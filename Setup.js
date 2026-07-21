@@ -40,7 +40,7 @@ class SystemSetup {
       const spreadsheet = Database.getSpreadsheet();
       const exists = Boolean(spreadsheet.getSheetByName(sheetName));
 
-      if (configKey === 'PREPAID_CARDS' || configKey === 'PREPAID_USAGE') {
+      if (configKey === 'BOOKINGS' || configKey === 'PREPAID_CARDS' || configKey === 'PREPAID_USAGE') {
         Database.ensureColumns(sheetName, headers);
         results.push({ sheet: sheetName, action: exists ? 'upgraded' : 'created' });
         return;
