@@ -291,6 +291,53 @@
         ? '<small>Dùng thẻ: ' + app.escape(customerMap[ownerId] || ownerId) + '</small>' : '';
       return '<article class="booking-item"><time>' + app.escape(booking.StartTime) + '<small>' + app.escape(booking.EndTime) + '</small></time><div class="booking-info"><strong>' + app.escape(customerMap[booking.CustomerID] || booking.CustomerID) + '</strong><p>' + app.escape(serviceMap[booking.ServiceID] || booking.ServiceID) + ' · Giường ' + app.escape(booking.BedID) + '</p>' + familyCard + '<span class="status-chip">' + app.escape(booking.Status) + '</span></div><div class="booking-actions">' + action + '</div></article>';
     }).join('') : '<div class="empty-state">Chưa có booking trong ngày đã chọn.</div>';
+    renderTechnicianAssessmentBookings(bookings || [], customerMap);
+  }
+
+  function renderTechnicianAssessmentBookings(bookings, customerMap) {
+    const select = document.getElementById('technicianAssessmentBooking');
+    if (!select || !authUi.user || authUi.user.Role !== 'Technician') return;
+    const current = select.value;
+    const employeeId = String(authUi.user.EmployeeID || '');
+    const mine = bookings.filter(function (booking) {
+      return String(booking.EmployeeID || '') === employeeId && booking.Status !== 'Hủy lịch' && booking.Status !== 'Không đến';
+    });
+    select.innerHTML = '<option value="">Chọn booking</option>' + mine.map(function (booking) {
+      const name = customerMap[booking.CustomerID] || booking.CustomerID;
+      return '<option value="' + app.escape(booking.BookingID) + '">' + app.escape(booking.StartTime + ' · ' + name + ' · ' + booking.BookingID) + '</option>';
+    }).join('');
+    if (mine.some(function (booking) { return booking.BookingID === current; })) select.value = current;
+    document.getElementById('uploadTechnicianAssessmentButton').disabled = !select.value;
+    if (select.value) loadTechnicianAssessmentFiles();
+    else document.getElementById('technicianAssessmentFiles').innerHTML = '<p class="file-empty">Chọn booking để xem phiếu đã tải.</p>';
+  }
+
+  function loadTechnicianAssessmentFiles() {
+    const select = document.getElementById('technicianAssessmentBooking');
+    const list = document.getElementById('technicianAssessmentFiles');
+    if (!select || !select.value) {
+      if (list) list.innerHTML = '<p class="file-empty">Chọn booking để xem phiếu đã tải.</p>';
+      return;
+    }
+    list.innerHTML = '<p class="file-empty">Đang tải phiếu...</p>';
+    apiCall('getTechnicianBookingAssessmentFiles', [select.value], function (files) {
+      list.innerHTML = files && files.length ? files.map(function (file) {
+        const href = file.Url ? ' href="' + app.escape(file.Url) + '" target="_blank" rel="noopener"' : '';
+        return '<a class="file-item"' + href + '><span>Phiếu cập nhật</span><strong>' + app.escape(file.FileName || 'Ảnh phiếu') + '</strong><small>' + app.escape(file.UploadDate ? String(file.UploadDate).slice(0, 10) : '') + '</small></a>';
+      }).join('') : '<p class="file-empty">Chưa có phiếu cập nhật nào cho booking này.</p>';
+    }, function (error) {
+      list.innerHTML = '<p class="file-empty">Không tải được danh sách phiếu.</p>';
+      handleBookingError(error);
+    });
+  }
+
+  function readTechnicianAssessmentFile(file) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(new Error('Không đọc được ảnh đã chọn.')); };
+      reader.readAsDataURL(file);
+    });
   }
 
   function bookingAction(booking) {
@@ -384,5 +431,46 @@
     document.getElementById('bookingDate').addEventListener('change', function () { document.getElementById('bookingFilterDate').value = this.value; loadBookings(); loadBookingAvailability(); });
     document.getElementById('bookingStart').addEventListener('change', loadBookingAvailability);
     document.getElementById('bookingEnd').addEventListener('change', loadBookingAvailability);
+    const technicianBooking = document.getElementById('technicianAssessmentBooking');
+    if (technicianBooking) technicianBooking.addEventListener('change', function () {
+      document.getElementById('uploadTechnicianAssessmentButton').disabled = !this.value;
+      loadTechnicianAssessmentFiles();
+    });
+    const technicianForm = document.getElementById('technicianAssessmentForm');
+    if (technicianForm) technicianForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      const bookingId = document.getElementById('technicianAssessmentBooking').value;
+      const input = document.getElementById('technicianAssessmentFile');
+      const file = input.files && input.files[0];
+      const button = document.getElementById('uploadTechnicianAssessmentButton');
+      if (!bookingId) { app.toast('Hãy chọn booking được phân công cho bạn.', 'error'); return; }
+      if (!file) { app.toast('Hãy chọn ảnh phiếu cập nhật.', 'error'); return; }
+      if (!String(file.type || '').startsWith('image/')) { app.toast('Chỉ được tải lên ảnh phiếu.', 'error'); return; }
+      if (file.size > 5 * 1024 * 1024) { app.toast('Ảnh tối đa 5 MB.', 'error'); return; }
+      button.disabled = true;
+      button.textContent = 'Đang đọc ảnh...';
+      readTechnicianAssessmentFile(file).then(function (base64) {
+        button.textContent = 'Đang lưu phiếu...';
+        apiCall('uploadTechnicianBookingAssessment', [bookingId, {
+          FileName: file.name,
+          MimeType: file.type || 'image/jpeg',
+          Base64: base64
+        }], function () {
+          input.value = '';
+          button.disabled = false;
+          button.textContent = 'Tải phiếu lên';
+          app.toast('Đã lưu phiếu cập nhật vào hồ sơ khách.');
+          loadTechnicianAssessmentFiles();
+        }, function (error) {
+          button.disabled = false;
+          button.textContent = 'Tải phiếu lên';
+          handleBookingError(error);
+        });
+      }).catch(function (error) {
+        button.disabled = false;
+        button.textContent = 'Tải phiếu lên';
+        handleBookingError(error);
+      });
+    });
   });
 </script>

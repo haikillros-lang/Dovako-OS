@@ -94,7 +94,8 @@
     list.innerHTML = files.map(function (file) {
       const url = file.Url ? ' href="' + app.escape(file.Url) + '" target="_blank" rel="noopener"' : '';
       const title = file.FileName || 'File không tên';
-      return '<a class="file-item"' + url + '><span>' + app.escape(file.FileType || 'File') + '</span><strong>' + app.escape(title) + '</strong><small>' + app.escape(file.UploadDate ? String(file.UploadDate).slice(0, 10) : '') + '</small></a>';
+      const typeLabels = { Assessment: 'Phiếu tình trạng', ProgressAssessment: 'Phiếu cập nhật', Before: 'Ảnh trước', After: 'Ảnh sau', Other: 'Khác' };
+      return '<a class="file-item"' + url + '><span>' + app.escape(typeLabels[file.FileType] || file.FileType || 'File') + '</span><strong>' + app.escape(title) + '</strong><small>' + app.escape(file.UploadDate ? String(file.UploadDate).slice(0, 10) : '') + '</small></a>';
     }).join('');
   }
 

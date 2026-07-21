@@ -31,5 +31,14 @@
       <div class="panel-head compact"><div><h2>Khung giờ còn trống</h2><p id="availabilityCaption">Đang tính lịch trống...</p></div></div>
       <div id="bookingAvailability" class="availability-list"><div class="empty-state">Đang tải...</div></div>
     </div>
+    <div class="technician-assessment-section" data-roles="Technician">
+      <div class="panel-head compact"><div><h2>Phiếu cập nhật tình trạng</h2><p>Chỉ hiển thị các booking được phân công cho bạn trong ngày đang xem.</p></div></div>
+      <form id="technicianAssessmentForm" class="technician-assessment-form">
+        <label class="form-field wide"><span>Booking của tôi <b>*</b></span><select id="technicianAssessmentBooking" required><option value="">Chọn booking</option></select></label>
+        <label class="form-field wide"><span>Ảnh phiếu cập nhật <b>*</b></span><input id="technicianAssessmentFile" type="file" accept="image/*" required><small class="picker-hint">Chỉ nhận ảnh, tối đa 5 MB. Ảnh được lưu vào hồ sơ khách và lịch sử booking.</small></label>
+        <div class="form-actions wide"><button id="uploadTechnicianAssessmentButton" class="button primary" type="submit" disabled>Tải phiếu lên</button></div>
+      </form>
+      <div id="technicianAssessmentFiles" class="file-list"><p class="file-empty">Chọn booking để xem phiếu đã tải.</p></div>
+    </div>
   </section>
 </div>
