@@ -556,9 +556,9 @@ class PrepaidService {
 }
 
 function getPrepaidOptions(token) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.options()); }
-function getPrepaidCards(token, options) { AuthService.requireSession(token); return Utils.toClient(PrepaidService.list(options)); }
-function getPrepaidPlans(token, includeInactive) { AuthService.requireSession(token); return Utils.toClient(PrepaidService.plans(includeInactive)); }
-function getAvailablePrepaidCards(token, customerId, serviceId, amount) { AuthService.requireSession(token); return Utils.toClient(PrepaidService.availableForBooking(customerId, serviceId, amount)); }
+function getPrepaidCards(token, options) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.list(options)); }
+function getPrepaidPlans(token, includeInactive) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.plans(includeInactive)); }
+function getAvailablePrepaidCards(token, customerId, serviceId, amount) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.availableForBooking(customerId, serviceId, amount)); }
 function createPrepaidCard(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.create(data)); }
 function updatePrepaidCardBonus(token, cardId, bonusSessions) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.RECEPTION]); return Utils.toClient(PrepaidService.updateBonus(cardId, bonusSessions)); }
 function createPrepaidPlan(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(PrepaidService.createPlan(data)); }

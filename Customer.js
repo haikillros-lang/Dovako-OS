@@ -108,7 +108,69 @@ class CustomerService {
    * protected even when their accumulated spending qualifies for VIP.
    */
   static insights(options) {
-    const customers = this.list(options);
+    return this.insightsFromCustomers(this.list(options));
+  }
+
+  /** Returns customer data prepared for the logged-in user's role. */
+  static listForSession(session, options) {
+    const customers = this.isTechnician(session)
+      ? this.listForTechnician(options)
+      : this.list(options);
+    return this.applySessionPrivacy(customers, session);
+  }
+
+  static insightsForSession(session, options) {
+    const customers = this.isTechnician(session)
+      ? this.listForTechnician(options)
+      : this.list(options);
+    return this.applySessionPrivacy(this.insightsFromCustomers(customers), session);
+  }
+
+  static getForSession(session, customerId) {
+    return this.applySessionPrivacy(this.get(customerId), session);
+  }
+
+  static searchForSession(session, query, options) {
+    const settings = Object.assign({}, options || {}, { query: query });
+    return this.listForSession(session, settings);
+  }
+
+  /** A technician can search by name or customer code, never by phone. */
+  static listForTechnician(options) {
+    const settings = options || {};
+    const query = this.normalizeSearch(settings.query);
+    const listOptions = Object.assign({}, settings, { query: '' });
+    delete listOptions.limit;
+    let customers = this.list(listOptions);
+    if (query) {
+      customers = customers.filter(function (customer) {
+        return [customer.CustomerID, customer.FullName].some(function (value) {
+          return CustomerService.normalizeSearch(value).indexOf(query) !== -1;
+        });
+      });
+    }
+    const limit = settings.limit === undefined || settings.limit === null
+      ? 0 : Validator.integer(settings.limit, 'Giới hạn kết quả', { min: 1 });
+    return limit ? customers.slice(0, limit) : customers;
+  }
+
+  static isTechnician(session) {
+    return Boolean(session && session.Role === CONFIG.ROLES.TECHNICIAN);
+  }
+
+  static applySessionPrivacy(data, session) {
+    if (!this.isTechnician(session)) return data;
+    const redact = function (customer) {
+      if (!customer) return customer;
+      const safe = Object.assign({}, customer);
+      // Do not send phone numbers to the browser of a technician at all.
+      safe.Phone = '';
+      return safe;
+    };
+    return Array.isArray(data) ? data.map(redact) : redact(data);
+  }
+
+  static insightsFromCustomers(customers) {
     const spending = this.spendingByCustomer();
     const vipThreshold = this.vipSpendThreshold();
     return customers.map(function (customer) {
@@ -231,10 +293,10 @@ class CustomerService {
 
 /* Apps Script entry points for google.script.run and manual administration. */
 function initializeCustomerModule() { return CustomerService.initialize(); }
-function getCustomers(token, options) { AuthService.requireSession(token); return Utils.toClient(CustomerService.list(options)); }
-function getCustomerInsights(token, options) { AuthService.requireSession(token); return Utils.toClient(CustomerService.insights(options)); }
-function getCustomer(token, customerId) { AuthService.requireSession(token); return Utils.toClient(CustomerService.get(customerId)); }
-function searchCustomers(token, query, options) { AuthService.requireSession(token); return Utils.toClient(CustomerService.search(query, options)); }
+function getCustomers(token, options) { const session = AuthService.requireSession(token); return Utils.toClient(CustomerService.listForSession(session, options)); }
+function getCustomerInsights(token, options) { const session = AuthService.requireSession(token); return Utils.toClient(CustomerService.insightsForSession(session, options)); }
+function getCustomer(token, customerId) { const session = AuthService.requireSession(token); return Utils.toClient(CustomerService.getForSession(session, customerId)); }
+function searchCustomers(token, query, options) { const session = AuthService.requireSession(token); return Utils.toClient(CustomerService.searchForSession(session, query, options)); }
 function createCustomer(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(CustomerService.create(data)); }
 function updateCustomer(token, customerId, changes) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(CustomerService.update(customerId, changes)); }
 function archiveCustomer(token, customerId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(CustomerService.archive(customerId)); }

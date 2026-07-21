@@ -73,4 +73,4 @@ class DriveService {
 }
 
 function getCustomerFiles(token, customerId) { AuthService.requireSession(token); return Utils.toClient(DriveService.list(customerId)); }
-function uploadCustomerFile(token, data) { AuthService.requireSession(token); return Utils.toClient(DriveService.upload(data)); }
+function uploadCustomerFile(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(DriveService.upload(data)); }

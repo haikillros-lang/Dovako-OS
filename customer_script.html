@@ -4,15 +4,19 @@
   function loadCustomers() {
     const search = document.getElementById('customerSearch');
     if (!search) return;
-    document.getElementById('customerTableBody').innerHTML = '<tr><td colspan="7" class="table-empty">Đang tải...</td></tr>';
+    const readOnly = isTechnicianCustomerView();
+    search.placeholder = readOnly ? 'Tìm tên hoặc mã khách' : 'Tìm tên, SĐT hoặc mã khách';
+    document.getElementById('customerTableBody').innerHTML = '<tr><td colspan="' + (readOnly ? 5 : 7) + '" class="table-empty">Đang tải...</td></tr>';
     apiCall('getCustomerInsights', [{ query: search.value }], renderCustomers, handleCustomerError);
   }
 
   function renderCustomers(customers) {
     const body = document.getElementById('customerTableBody');
+    const readOnly = isTechnicianCustomerView();
+    const columns = readOnly ? 5 : 7;
     document.getElementById('customerCount').textContent = (customers || []).length + ' hồ sơ';
     if (!customers || !customers.length) {
-      body.innerHTML = '<tr><td colspan="7" class="table-empty">Chưa tìm thấy khách hàng phù hợp.</td></tr>';
+      body.innerHTML = '<tr><td colspan="' + columns + '" class="table-empty">Chưa tìm thấy khách hàng phù hợp.</td></tr>';
       return;
     }
     body.innerHTML = customers.map(function (customer) {
@@ -20,13 +24,13 @@
       const tier = customer.CustomerTier || 'Thường';
       const type = customer.CustomerType || 'Khách lẻ';
       return '<tr><td><strong>' + app.escape(customer.FullName) + '</strong><small>' + app.escape(customer.CustomerID) + '</small></td>' +
-        '<td>' + app.escape(customer.Phone) + '</td>' +
+        (readOnly ? '' : '<td>' + app.escape(customer.Phone) + '</td>') +
         '<td><span class="status-chip ' + (type === 'Khách thẻ' ? 'vip' : '') + '">' + app.escape(type) + '</span></td>' +
         '<td>' + app.currency(customer.TotalSpend || 0) + '</td>' +
         '<td><span class="status-chip ' + (tier === 'VIP' ? 'vip' : '') + '">' + app.escape(tier) + '</span></td>' +
         '<td><span class="status-chip ' + customerStatusClass(status) + '">' + app.escape(status) + '</span></td>' +
-        '<td class="actions"><button class="icon-button" type="button" onclick="editCustomer(\'' + app.escape(customer.CustomerID) + '\')">Sửa</button>' +
-        (status !== 'Inactive' ? '<button class="icon-button danger" type="button" onclick="archiveCustomer(\'' + app.escape(customer.CustomerID) + '\')">Lưu trữ</button>' : '') + '</td></tr>';
+        (readOnly ? '' : '<td class="actions"><button class="icon-button" type="button" onclick="editCustomer(\'' + app.escape(customer.CustomerID) + '\')">Sửa</button>' +
+          (status !== 'Inactive' ? '<button class="icon-button danger" type="button" onclick="archiveCustomer(\'' + app.escape(customer.CustomerID) + '\')">Lưu trữ</button>' : '') + '</td>') + '</tr>';
     }).join('');
   }
 
@@ -109,6 +113,7 @@
 
   function setFormValue(id, value) { document.getElementById(id).value = value || ''; }
   function customerStatusClass(status) { return status === 'VIP' ? 'vip' : status === 'Inactive' ? 'inactive' : status === 'Blacklist' ? 'danger' : ''; }
+  function isTechnicianCustomerView() { return Boolean(authUi.user && authUi.user.Role === 'Technician'); }
 
   document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('customerForm');
