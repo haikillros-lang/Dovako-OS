@@ -42,7 +42,7 @@
       document.getElementById('cancelEditButton').classList.remove('hidden');
       setFormValue('customerFullName', customer.FullName);
       setFormValue('customerPhone', customer.Phone);
-      setFormValue('customerBirthday', customer.Birthday ? String(customer.Birthday).slice(0, 10) : '');
+      setFormValue('customerBirthday', dateUi.display(customer.Birthday));
       setFormValue('customerGender', customer.Gender);
       setFormValue('customerOccupation', customer.Occupation);
       setFormValue('customerSource', customer.Source);
@@ -95,7 +95,7 @@
       const url = file.Url ? ' href="' + app.escape(file.Url) + '" target="_blank" rel="noopener"' : '';
       const title = file.FileName || 'File không tên';
       const typeLabels = { Assessment: 'Phiếu tình trạng', ProgressAssessment: 'Phiếu cập nhật', Before: 'Ảnh trước', After: 'Ảnh sau', Other: 'Khác' };
-      return '<a class="file-item"' + url + '><span>' + app.escape(typeLabels[file.FileType] || file.FileType || 'File') + '</span><strong>' + app.escape(title) + '</strong><small>' + app.escape(file.UploadDate ? String(file.UploadDate).slice(0, 10) : '') + '</small></a>';
+      return '<a class="file-item"' + url + '><span>' + app.escape(typeLabels[file.FileType] || file.FileType || 'File') + '</span><strong>' + app.escape(title) + '</strong><small>' + app.escape(dateUi.display(file.UploadDate)) + '</small></a>';
     }).join('');
   }
 

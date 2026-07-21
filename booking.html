@@ -12,7 +12,7 @@
       <label class="form-field"><span>Dịch vụ <b>*</b></span><select id="bookingService" name="ServiceID" required><option value="">Chọn dịch vụ</option></select></label>
       <label class="form-field"><span>Nhân viên <b>*</b></span><select id="bookingEmployee" name="EmployeeID" required><option value="">Chọn nhân viên</option></select></label>
       <div id="bookingPrepaidNotice" class="notice wide hidden"></div>
-      <label class="form-field"><span>Ngày <b>*</b></span><input id="bookingDate" name="BookingDate" type="date" required></label>
+      <label class="form-field"><span>Ngày <b>*</b></span><input id="bookingDate" name="BookingDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi" required></label>
       <label class="form-field"><span>Giường <b>*</b></span><select id="bookingBed" name="BedID" required><option value="">Chọn giường</option></select></label>
       <label class="form-field"><span>Giờ bắt đầu <b>*</b></span><input id="bookingStart" name="StartTime" type="time" value="09:00" required></label>
       <label class="form-field"><span>Giờ kết thúc <b>*</b></span><input id="bookingEnd" name="EndTime" type="time" value="10:00" required></label>
@@ -25,7 +25,7 @@
   </section>
 
   <section class="panel booking-list-panel">
-    <div class="panel-head compact"><div><h2>Lịch trong ngày</h2><p id="bookingCount">Đang tải...</p></div><input id="bookingFilterDate" class="date-filter" type="date"></div>
+    <div class="panel-head compact"><div><h2>Lịch trong ngày</h2><p id="bookingCount">Đang tải...</p></div><input id="bookingFilterDate" class="date-filter" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi"></div>
     <div id="bookingList" class="booking-list"><div class="empty-state">Đang tải...</div></div>
     <div class="availability-section">
       <div class="panel-head compact"><div><h2>Khung giờ còn trống</h2><p id="availabilityCaption">Đang tính lịch trống...</p></div></div>

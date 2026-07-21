@@ -7,8 +7,8 @@
         <button class="button secondary" type="button" onclick="loadMonthlyRevenue()">Xem tháng</button>
         <label>Theo năm <input id="reportYear" type="number" min="2000" max="2100"></label>
         <button class="button secondary" type="button" onclick="loadYearlyRevenue()">Xem năm</button>
-        <label>Từ ngày <input id="reportFrom" type="date"></label>
-        <label>Đến ngày <input id="reportTo" type="date"></label>
+        <label>Từ ngày <input id="reportFrom" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi"></label>
+        <label>Đến ngày <input id="reportTo" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi"></label>
         <button class="button primary" type="button" onclick="loadReports()">Xem báo cáo</button>
       </div>
     </div>

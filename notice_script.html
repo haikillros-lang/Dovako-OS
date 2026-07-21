@@ -5,14 +5,11 @@
     return Boolean(authUi.user) && ['Admin', 'Manager'].indexOf(authUi.user.Role) !== -1;
   }
 
-  function noticeDateInput(value) { return value ? String(value).slice(0, 10) : ''; }
+  function noticeDateInput(value) { return dateUi.display(value); }
 
   function noticeDateLabel(value) {
     if (!value) return '';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('vi-VN', {
-      day: '2-digit', month: '2-digit', year: 'numeric'
-    }).format(date);
+    return dateUi.display(value);
   }
 
   function loadNotices() {
@@ -121,11 +118,10 @@
   const leaveUi = { items: [], employees: [], editingId: null, employeesLoaded: false, searchTimer: null };
 
   function leaveCanManage() { return noticeCanManage(); }
-  function leaveDateInput(value) { return value ? String(value).slice(0, 10) : ''; }
+  function leaveDateInput(value) { return dateUi.display(value); }
   function leaveDateLabel(value) {
     if (!value) return '';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+    return dateUi.display(value);
   }
 
   function loadLeaveSchedules() {
@@ -198,7 +194,7 @@
     leaveUi.editingId = null;
     const form = document.getElementById('leaveForm');
     form.reset();
-    const today = new Date().toISOString().slice(0, 10);
+    const today = dateUi.today();
     form.elements.StartDate.value = today;
     form.elements.EndDate.value = today;
     form.elements.Status.value = 'Đã đăng';

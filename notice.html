@@ -6,8 +6,8 @@
         <label class="form-field"><span>Loại nội dung <b>*</b></span><select name="Category" required><option value="Thông báo">Thông báo</option><option value="Quy định">Quy định</option><option value="Quy trình">Quy trình</option><option value="Khuyến mãi">Khuyến mãi</option></select></label>
         <label class="form-field"><span>Trạng thái <b>*</b></span><select name="Status" required><option value="Đã đăng">Đã đăng</option><option value="Nháp">Nháp</option><option value="Lưu trữ">Lưu trữ</option></select></label>
         <label class="form-field wide"><span>Tiêu đề <b>*</b></span><input name="Title" maxlength="160" required placeholder="Ví dụ: Quy trình đón khách mới"></label>
-        <label class="form-field"><span>Ngày hiệu lực <b>*</b></span><input name="EffectiveDate" type="date" required></label>
-        <label class="form-field"><span>Ngày hết hiệu lực</span><input name="ExpiryDate" type="date"></label>
+        <label class="form-field"><span>Ngày hiệu lực <b>*</b></span><input name="EffectiveDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi" required></label>
+        <label class="form-field"><span>Ngày hết hiệu lực</span><input name="ExpiryDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi"></label>
         <label class="form-field wide"><span>Nội dung <b>*</b></span><textarea name="Content" rows="10" maxlength="10000" required placeholder="Nhập nội dung chi tiết để nhân viên thực hiện..."></textarea></label>
         <div class="form-actions wide notice-form-actions"><button id="saveNoticeButton" class="button primary" type="submit">Đăng nội dung</button><button id="cancelNoticeEditButton" class="button secondary hidden" type="button" onclick="cancelNoticeEditUi()">Hủy sửa</button></div>
       </div>
@@ -25,8 +25,8 @@
     <form id="leaveForm" class="notice-form">
       <div class="form-grid">
         <label class="form-field wide"><span>Nhân viên <b>*</b></span><select name="EmployeeID" required><option value="">Chọn nhân viên</option></select></label>
-        <label class="form-field"><span>Ngày bắt đầu <b>*</b></span><input name="StartDate" type="date" required></label>
-        <label class="form-field"><span>Ngày kết thúc <b>*</b></span><input name="EndDate" type="date" required></label>
+        <label class="form-field"><span>Ngày bắt đầu <b>*</b></span><input name="StartDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi" required></label>
+        <label class="form-field"><span>Ngày kết thúc <b>*</b></span><input name="EndDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi" required></label>
         <label class="form-field"><span>Trạng thái <b>*</b></span><select name="Status" required><option value="Đã đăng">Đã đăng</option><option value="Nháp">Nháp</option></select></label>
         <label class="form-field wide"><span>Ghi chú <b>*</b></span><textarea name="Reason" rows="5" maxlength="1000" required placeholder="Ví dụ: Nghỉ phép năm, nghỉ việc riêng..."></textarea></label>
         <div class="form-actions wide notice-form-actions"><button id="saveLeaveButton" class="button primary" type="submit">Đăng lịch nghỉ</button><button id="cancelLeaveEditButton" class="button secondary hidden" type="button" onclick="cancelLeaveEditUi()">Hủy sửa</button></div>

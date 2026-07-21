@@ -1,5 +1,5 @@
 <script>
-  function reportDateValue(date) { return date.toISOString().slice(0, 10); }
+  function reportDateValue(date) { return dateUi.display(date); }
   function reportRows(rows, emptyText) {
     if (!rows || !rows.length) return '<tr><td colspan="3" class="table-empty">' + app.escape(emptyText) + '</td></tr>';
     return rows.map(function (row) { return '<tr><td><strong>' + app.escape(row.name) + '</strong></td><td>' + app.escape(row.bookings) + '</td><td>' + app.currency(row.revenue) + '</td></tr>'; }).join('');
@@ -26,7 +26,7 @@
   function renderReport(report) {
     const summary = report.summary || {};
     const cards = [
-      ['Doanh thu', app.currency(summary.revenue), report.from + ' – ' + report.to],
+      ['Doanh thu', app.currency(summary.revenue), dateUi.display(report.from) + ' – ' + dateUi.display(report.to)],
       ['Doanh thu thẻ', app.currency(summary.prepaidRevenue), (summary.prepaidCards || 0) + ' thẻ đã bán'],
       ['Booking hoàn thành', summary.completedBookings || 0, 'Trên ' + (summary.totalBookings || 0) + ' booking'],
       ['Hủy / không đến', summary.cancelledBookings || 0, 'Trong khoảng đã chọn']

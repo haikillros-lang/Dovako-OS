@@ -71,12 +71,37 @@ class Validator {
       return null;
     }
 
-    const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+    const date = this.parseDate(value);
     if (Number.isNaN(date.getTime())) throw new Error(name + ' không hợp lệ.');
     if (settings.notPast && this.startOfDay(date) < this.startOfDay(new Date())) {
       throw new Error(name + ' không được ở quá khứ.');
     }
     return date;
+  }
+
+  /**
+   * Accepts both the Vietnamese UI format (dd/MM/yyyy) and ISO dates.
+   * Dates are constructed at noon local time so Apps Script does not shift a
+   * calendar date when it serializes data between the browser and Sheets.
+   */
+  static parseDate(value) {
+    if (value instanceof Date) return new Date(value.getTime());
+    const text = String(value || '').trim();
+    let match = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if (match) return this.createCalendarDate(Number(match[3]), Number(match[2]), Number(match[1]));
+
+    match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+    if (match) return this.createCalendarDate(Number(match[1]), Number(match[2]), Number(match[3]));
+
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? new Date('invalid') : parsed;
+  }
+
+  static createCalendarDate(year, month, day) {
+    const date = new Date(year, month - 1, day, 12, 0, 0, 0);
+    return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day
+      ? date
+      : new Date('invalid');
   }
 
   static time(value, label, options) {

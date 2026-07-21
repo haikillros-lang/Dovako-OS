@@ -6,7 +6,7 @@
       <label class="form-field wide"><span>Mệnh giá thẻ <b>*</b></span><select id="prepaidPlan" name="PlanID" required><option value="">Chọn mệnh giá</option></select></label>
       <label class="form-field"><span>Dịch vụ tặng kèm</span><select id="prepaidBonusService" name="BonusServiceID"><option value="">Không có</option></select></label>
       <label class="form-field"><span>Buổi tặng</span><input id="prepaidBonusSessions" name="BonusSessions" type="number" min="0" max="100" value="1" required></label>
-      <label class="form-field wide"><span>Ngày mua <b>*</b></span><input id="prepaidPurchasedDate" name="PurchasedDate" type="date" required></label>
+      <label class="form-field wide"><span>Ngày mua <b>*</b></span><input id="prepaidPurchasedDate" name="PurchasedDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi" required></label>
       <div id="prepaidSummary" class="notice wide">Chọn mệnh giá để xem chiết khấu và số dư thẻ.</div>
       <label class="form-field wide"><span>Ghi chú</span><textarea name="Note" rows="2" maxlength="1000" placeholder="Hình thức thanh toán, ưu đãi đặc biệt nếu có..."></textarea></label>
       <div class="form-actions wide"><button id="savePrepaidButton" class="button primary" type="submit">Tạo thẻ trả trước</button></div>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="vi">
   <head>
     <base target="_top">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -71,6 +71,40 @@
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
     <script>
+      const dateUi = {
+        pad(value) { return String(value).padStart(2, '0'); },
+        parse(value) {
+          if (!value) return null;
+          if (value instanceof Date) return new Date(value.getFullYear(), value.getMonth(), value.getDate(), 12);
+          const text = String(value).trim();
+          let match = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+          if (match) return this.calendarDate(Number(match[3]), Number(match[2]), Number(match[1]));
+          match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:$|T)/);
+          if (match) return this.calendarDate(Number(match[1]), Number(match[2]), Number(match[3]));
+          const date = new Date(text);
+          return Number.isNaN(date.getTime()) ? null : date;
+        },
+        calendarDate(year, month, day) {
+          const date = new Date(year, month - 1, day, 12);
+          return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date : null;
+        },
+        display(value) {
+          const date = this.parse(value);
+          return date ? this.pad(date.getDate()) + '/' + this.pad(date.getMonth() + 1) + '/' + date.getFullYear() : '';
+        },
+        today() { return this.display(new Date()); },
+        bind() {
+          document.querySelectorAll('input[data-date-format="vi"]').forEach(function (input) {
+            const normalize = function () {
+              if (!input.value) return;
+              const formatted = dateUi.display(input.value);
+              if (formatted) input.value = formatted;
+            };
+            input.addEventListener('blur', normalize);
+            normalize();
+          });
+        }
+      };
       const app = {
         titles: {
           dashboard: ['Tổng quan', 'Vận hành hằng ngày'],
@@ -158,7 +192,7 @@
         }
       };
       document.getElementById('todayLabel').textContent = new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
-      document.addEventListener('DOMContentLoaded', function () { authUi.bootstrap(); });
+      document.addEventListener('DOMContentLoaded', function () { dateUi.bind(); authUi.bootstrap(); });
     </script>
     <?!= include('customer_script'); ?>
     <?!= include('booking_script'); ?>

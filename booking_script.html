@@ -323,7 +323,7 @@
     apiCall('getTechnicianBookingAssessmentFiles', [select.value], function (files) {
       list.innerHTML = files && files.length ? files.map(function (file) {
         const href = file.Url ? ' href="' + app.escape(file.Url) + '" target="_blank" rel="noopener"' : '';
-        return '<a class="file-item"' + href + '><span>Phiếu cập nhật</span><strong>' + app.escape(file.FileName || 'Ảnh phiếu') + '</strong><small>' + app.escape(file.UploadDate ? String(file.UploadDate).slice(0, 10) : '') + '</small></a>';
+        return '<a class="file-item"' + href + '><span>Phiếu cập nhật</span><strong>' + app.escape(file.FileName || 'Ảnh phiếu') + '</strong><small>' + app.escape(dateUi.display(file.UploadDate)) + '</small></a>';
       }).join('') : '<p class="file-empty">Chưa có phiếu cập nhật nào cho booking này.</p>';
     }, function (error) {
       list.innerHTML = '<p class="file-empty">Không tải được danh sách phiếu.</p>';
@@ -408,7 +408,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = dateUi.today();
     document.getElementById('bookingDate').value = today;
     document.getElementById('bookingFilterDate').value = today;
     document.getElementById('bookingForm').addEventListener('submit', function (event) {
