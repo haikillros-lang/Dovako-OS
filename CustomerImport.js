@@ -15,27 +15,7 @@ class CustomerImportService {
   }
 
   static importAll() {
-    const prepared = this.prepare();
-    if (!prepared.toInsert.length) return prepared.summary;
-
-    const saved = Database.insertManyWithGeneratedIds(
-      this.TABLE,
-      CONFIG.PREFIX.CUSTOMER,
-      prepared.toInsert,
-      { idColumn: 'CustomerID', padding: 6, lockTimeoutMs: 30000 }
-    );
-    if (typeof AppLogger !== 'undefined') {
-      AppLogger.safe('AUDIT', 'CustomerImport', 'IMPORT_LEGACY_CUSTOMERS', '',
-        'Imported legacy customers', {
-          inserted: saved.length,
-          skippedExistingLegacyId: prepared.summary.skippedExistingLegacyId,
-          skippedPhoneMatch: prepared.summary.skippedPhoneMatch
-        });
-    }
-    return Object.assign({}, prepared.summary, {
-      inserted: saved.length,
-      completedAt: new Date()
-    });
+    throw new Error('Chức năng nhập dữ liệu khách cũ đã được tắt.');
   }
 
   static prepare() {
@@ -177,18 +157,15 @@ class CustomerImportService {
 }
 
 /** Preview first, then run importLegacyCustomers once in Apps Script. */
-function previewLegacyCustomerImport() { return CustomerImportService.preview(); }
-function importLegacyCustomers() { return CustomerImportService.importAll(); }
+function previewLegacyCustomerImport() { throw new Error('Chức năng nhập dữ liệu khách cũ đã được tắt.'); }
+function importLegacyCustomers() { throw new Error('Chức năng nhập dữ liệu khách cũ đã được tắt.'); }
 
 function getLegacyCustomerImportPreview(token) {
   AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);
-  return Utils.toClient(CustomerImportService.preview());
+  return { disabled: true, message: 'Chức năng nhập dữ liệu khách cũ đã được tắt.' };
 }
 
 function importLegacyCustomersForAdmin(token, confirmationPhrase) {
   AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);
-  if (String(confirmationPhrase || '').trim() !== 'NHAP KHACH CU') {
-    throw new Error('Nhập đúng cụm NHAP KHACH CU để xác nhận nhập dữ liệu.');
-  }
-  return Utils.toClient(CustomerImportService.importAll());
+  throw new Error('Chức năng nhập dữ liệu khách cũ đã được tắt.');
 }

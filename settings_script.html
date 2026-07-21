@@ -6,21 +6,15 @@
     apiCall('getServices', [], renderServices, handleSettingsError);
     if (authUi.user && authUi.user.Role === 'Admin') {
       apiCall('getUsers', [], renderUsers, handleSettingsError);
-      apiCall('getLegacyCustomerImportPreview', [], renderLegacyCustomerImportPreview, handleSettingsError);
     }
   }
-  function renderLegacyCustomerImportPreview(summary) {
-    const target = document.getElementById('legacyCustomerImportInfo');
-    if (!target) return;
-    target.innerHTML = '<strong>' + app.escape(String(summary.sourceRecords || 0)) + ' hồ sơ nguồn</strong> · ' +
-      app.escape(String(summary.readyToImport || 0)) + ' sẵn sàng nhập · ' +
-      app.escape(String((summary.skippedExistingLegacyId || 0) + (summary.skippedPhoneMatch || 0))) + ' đã có trong hệ thống.';
-  }
-  function runLegacyCustomerImportUi() {
-    const phrase = window.prompt('Dữ liệu sẽ được nhập vào DOVAKO OS và không tạo trùng. Nhập NHAP KHACH CU để xác nhận:');
+  function purgeCustomerDataUi() {
+    const warning = 'Thao tác này xóa toàn bộ khách hàng, booking, thẻ trả trước, lịch sử trừ thẻ và liên kết file. Ảnh gốc trên Google Drive vẫn được giữ lại. Không thể khôi phục dữ liệu trên hệ thống.';
+    if (!window.confirm(warning + '\n\nBạn có muốn tiếp tục?')) return;
+    const phrase = window.prompt('Nhập XOA DU LIEU KHACH HANG để xác nhận xóa vĩnh viễn:');
     if (phrase === null) return;
-    apiCall('importLegacyCustomersForAdmin', [phrase], function (result) {
-      app.toast('Đã nhập ' + result.inserted + ' hồ sơ khách hàng.');
+    apiCall('purgeAllCustomerDataForAdmin', [phrase], function (result) {
+      app.toast('Đã xóa ' + result.deletedCustomers + ' khách, ' + result.deletedBookings + ' booking và ' + result.deletedPrepaidCards + ' thẻ.');
       loadSettings();
     }, handleSettingsError);
   }

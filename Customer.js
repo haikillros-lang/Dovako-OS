@@ -87,6 +87,51 @@ class CustomerService {
     return this.setStatus(customerId, CONFIG.CUSTOMER_STATUS.ACTIVE, 'RESTORE');
   }
 
+  /**
+   * Permanently resets all operational customer records. This intentionally
+   * removes related bookings, prepaid-card transactions and file links first
+   * so the database never retains broken CustomerID references. Physical files
+   * in Google Drive are retained for manual review and recovery.
+   */
+  static purgeAllOperationalData() {
+    this.initialize();
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const tables = CONFIG.SHEETS;
+      const count = function (tableName) {
+        try { return Database.findAll(tableName); } catch (error) { return []; }
+      };
+      const result = {
+        customers: count(tables.CUSTOMERS),
+        bookings: count(tables.BOOKINGS),
+        prepaidCards: count(tables.PREPAID_CARDS),
+        prepaidUsage: count(tables.PREPAID_USAGE),
+        files: count(tables.FILES)
+      };
+
+      // Delete dependent records before their parent customer/card records.
+      Database.removeRecords(tables.PREPAID_USAGE, result.prepaidUsage);
+      Database.removeRecords(tables.FILES, result.files);
+      Database.removeRecords(tables.PREPAID_CARDS, result.prepaidCards);
+      Database.removeRecords(tables.BOOKINGS, result.bookings);
+      Database.removeRecords(tables.CUSTOMERS, result.customers);
+
+      const summary = {
+        deletedCustomers: result.customers.length,
+        deletedBookings: result.bookings.length,
+        deletedPrepaidCards: result.prepaidCards.length,
+        deletedPrepaidUsage: result.prepaidUsage.length,
+        deletedFileLinks: result.files.length,
+        driveFilesRetained: true
+      };
+      this.audit('PURGE_ALL_OPERATIONAL_DATA', '', summary);
+      return summary;
+    } finally {
+      lock.releaseLock();
+    }
+  }
+
   static setStatus(customerId, status, action) {
     this.initialize();
     if (!this.get(customerId)) throw new Error('Không tìm thấy khách hàng: ' + customerId);
@@ -301,3 +346,10 @@ function createCustomer(token, data) { AuthService.requireSession(token, [CONFIG
 function updateCustomer(token, customerId, changes) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(CustomerService.update(customerId, changes)); }
 function archiveCustomer(token, customerId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(CustomerService.archive(customerId)); }
 function restoreCustomer(token, customerId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CustomerService.restore(customerId)); }
+function purgeAllCustomerDataForAdmin(token, confirmationPhrase) {
+  AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);
+  if (String(confirmationPhrase || '').trim() !== 'XOA DU LIEU KHACH HANG') {
+    throw new Error('Nhập đúng cụm XOA DU LIEU KHACH HANG để xác nhận xóa dữ liệu.');
+  }
+  return Utils.toClient(CustomerService.purgeAllOperationalData());
+}
