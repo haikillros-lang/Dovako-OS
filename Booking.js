@@ -60,12 +60,17 @@ class BookingService {
   }
 
   /** Reference data for the booking form. Admin can maintain these sheets later. */
-  static options() {
+  static options(input) {
     this.initialize();
     CatalogService.initialize();
+    const request = input || {};
+    const date = request.date ? Validator.date(request.date, 'Ngày booking', { required: true }) : new Date();
+    const leaveEmployeeIds = this.employeeIdsOnLeave(date);
     return {
       customers: CustomerService.list({ includeInactive: false }),
-      employees: CatalogService.employees(false),
+      employees: CatalogService.employees(false).filter(function (employee) {
+        return !leaveEmployeeIds[String(employee.EmployeeID)];
+      }),
       services: CatalogService.services(false),
       beds: Array.from({ length: CONFIG.SYSTEM.TOTAL_BEDS }, function (_, index) {
         return String(index + 1);
@@ -80,7 +85,10 @@ class BookingService {
     const request = input || {};
     const date = request.date ? Validator.date(request.date, 'Ngày xem lịch', { required: true }) : new Date();
     const duration = request.duration ? Validator.integer(request.duration, 'Thời lượng', { required: true, min: 15, max: 480 }) : 60;
-    const employees = CatalogService.employees(false);
+    const leaveEmployeeIds = this.employeeIdsOnLeave(date);
+    const employees = CatalogService.employees(false).filter(function (employee) {
+      return !leaveEmployeeIds[String(employee.EmployeeID)];
+    });
     const bookings = this.list({ date: date, includeCancelled: false });
     const slotMinutes = Number(CONFIG.SYSTEM.SLOT_MINUTES || 30);
     const opening = Number(CONFIG.SYSTEM.START_HOUR) * 60;
@@ -108,6 +116,7 @@ class BookingService {
     const booking = this.normalizeForCreate(input);
     this.assertCustomerAvailable(booking.CustomerID);
     this.assertCardOwnerAvailable(booking.CardOwnerCustomerID);
+    this.assertEmployeeAvailable(booking.EmployeeID, booking.BookingDate);
     this.assertNoConflict(booking);
 
     const saved = Database.insertWithGeneratedId(this.TABLE, CONFIG.PREFIX.BOOKING, booking, {
@@ -134,6 +143,7 @@ class BookingService {
     const updated = this.normalizeForUpdate(Object.assign({}, current, this.pickEditableFields(changes)), current);
     this.assertCustomerAvailable(updated.CustomerID);
     this.assertCardOwnerAvailable(updated.CardOwnerCustomerID);
+    this.assertEmployeeAvailable(updated.EmployeeID, updated.BookingDate);
     this.assertNoConflict(updated, bookingId);
     const saved = Database.update(this.TABLE, bookingId, updated, 'BookingID');
     this.audit('UPDATE', bookingId, { changedFields: Object.keys(this.pickEditableFields(changes)) });
@@ -251,6 +261,23 @@ class BookingService {
   static assertCardOwnerAvailable(cardOwnerCustomerId) {
     if (!cardOwnerCustomerId) return;
     this.assertCustomerAvailable(cardOwnerCustomerId);
+  }
+
+  static employeeIdsOnLeave(date) {
+    return typeof LeaveService !== 'undefined'
+      ? LeaveService.employeeIdsOnLeave(date)
+      : {};
+  }
+
+  static assertEmployeeAvailable(employeeId, date) {
+    CatalogService.initialize();
+    const employee = CatalogService.employees(false).find(function (item) {
+      return String(item.EmployeeID) === String(employeeId);
+    });
+    if (!employee) throw new Error('Nhân viên không tồn tại hoặc đã lưu trữ.');
+    if (this.employeeIdsOnLeave(date)[String(employeeId)]) {
+      throw new Error('Nhân viên đang nghỉ ngày ' + Utilities.formatDate(new Date(date), CONFIG.TIMEZONE, 'dd/MM/yyyy') + '. Hãy chọn nhân viên khác.');
+    }
   }
 
   static assertNoConflict(candidate, excludedBookingId) {
@@ -443,9 +470,9 @@ function initializeBookingModule() { return BookingService.initialize(); }
 function getBookings(token, options) { AuthService.requireSession(token); return Utils.toClient(BookingService.list(options)); }
 function getBooking(token, bookingId) { AuthService.requireSession(token); return Utils.toClient(BookingService.get(bookingId)); }
 function getTodayBookings(token) { AuthService.requireSession(token); return Utils.toClient(BookingService.today()); }
-function getBookingOptions(token) {
+function getBookingOptions(token, input) {
   const session = AuthService.requireSession(token);
-  const options = BookingService.options();
+  const options = BookingService.options(input);
   options.customers = CustomerService.listForSession(session, { includeInactive: false });
   return Utils.toClient(options);
 }

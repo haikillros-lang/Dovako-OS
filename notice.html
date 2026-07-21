@@ -25,16 +25,21 @@
     <form id="leaveForm" class="notice-form">
       <div class="form-grid">
         <label class="form-field wide"><span>Nhân viên <b>*</b></span><select name="EmployeeID" required><option value="">Chọn nhân viên</option></select></label>
-        <label class="form-field"><span>Ngày bắt đầu <b>*</b></span><input name="StartDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi" required></label>
-        <label class="form-field"><span>Ngày kết thúc <b>*</b></span><input name="EndDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi" required></label>
+        <label class="form-field"><span>Ngày bắt đầu <b>*</b></span><span class="leave-date-control"><input name="StartDate" type="text" readonly placeholder="dd/mm/yyyy" data-date-format="vi" required onclick="openLeaveDatePicker('StartDate')"><button type="button" class="leave-date-button" onclick="openLeaveDatePicker('StartDate')" aria-label="Chọn ngày bắt đầu">Chọn ngày</button></span></label>
+        <label class="form-field"><span>Ngày kết thúc <b>*</b></span><span class="leave-date-control"><input name="EndDate" type="text" readonly placeholder="dd/mm/yyyy" data-date-format="vi" required onclick="openLeaveDatePicker('EndDate')"><button type="button" class="leave-date-button" onclick="openLeaveDatePicker('EndDate')" aria-label="Chọn ngày kết thúc">Chọn ngày</button></span></label>
         <label class="form-field"><span>Trạng thái <b>*</b></span><select name="Status" required><option value="Đã đăng">Đã đăng</option><option value="Nháp">Nháp</option></select></label>
         <label class="form-field wide"><span>Ghi chú <b>*</b></span><textarea name="Reason" rows="5" maxlength="1000" required placeholder="Ví dụ: Nghỉ phép năm, nghỉ việc riêng..."></textarea></label>
         <div class="form-actions wide notice-form-actions"><button id="saveLeaveButton" class="button primary" type="submit">Đăng lịch nghỉ</button><button id="cancelLeaveEditButton" class="button secondary hidden" type="button" onclick="cancelLeaveEditUi()">Hủy sửa</button></div>
       </div>
     </form>
+    <div id="leaveDatePicker" class="leave-date-picker hidden" role="dialog" aria-label="Chọn ngày nghỉ">
+      <div class="leave-picker-head"><button type="button" class="icon-button" onclick="moveLeaveDatePicker(-1)" aria-label="Tháng trước">‹</button><strong id="leavePickerMonthLabel"></strong><span><button type="button" class="icon-button" onclick="moveLeaveDatePicker(1)" aria-label="Tháng sau">›</button><button type="button" class="icon-button" onclick="closeLeaveDatePicker()">Đóng</button></span></div>
+      <table class="leave-picker-calendar" aria-label="Lịch chọn ngày"><thead><tr><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th>CN</th></tr></thead><tbody id="leavePickerCalendarBody"></tbody></table>
+    </div>
   </section>
   <section class="panel leave-list-panel">
     <div class="panel-head"><div><h2>Lịch nghỉ nhân viên</h2><p id="leaveListSummary">Đang tải lịch nghỉ...</p></div><div class="notice-filters"><input id="leaveMonth" type="month" aria-label="Chọn tháng" onchange="loadLeaveSchedules()"><select id="leaveStatusFilter" data-roles="Admin,Manager" aria-label="Lọc trạng thái" onchange="loadLeaveSchedules()"><option value="">Mọi trạng thái</option><option value="Đã đăng">Đã đăng</option><option value="Nháp">Nháp</option><option value="Lưu trữ">Lưu trữ</option></select><input id="leaveSearch" class="panel-search" type="search" placeholder="Tìm nhân viên hoặc ghi chú" aria-label="Tìm lịch nghỉ"></div></div>
+    <div id="leaveMonthCalendar" class="leave-month-calendar-wrap" aria-live="polite"></div>
     <div id="leaveList" class="leave-list" aria-live="polite"><div class="empty-state">Đang tải lịch nghỉ...</div></div>
   </section>
 </div>

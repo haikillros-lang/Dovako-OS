@@ -12,11 +12,18 @@
   };
 
   function loadBookingScreen() {
-    apiCall('getBookingOptions', [], function (options) {
-      bookingUi.options = options || bookingUi.options;
-      renderBookingOptions();
+    loadBookingOptionsForDate(function () {
       loadBookings();
       loadBookingAvailability();
+    });
+  }
+
+  function loadBookingOptionsForDate(done) {
+    const date = document.getElementById('bookingDate').value || dateUi.today();
+    apiCall('getBookingOptions', [{ date: date }], function (options) {
+      bookingUi.options = options || bookingUi.options;
+      renderBookingOptions();
+      if (typeof done === 'function') done();
     }, handleBookingError);
   }
 
@@ -428,7 +435,10 @@
     document.getElementById('bookingPrice').addEventListener('input', function () { bookingRecalculate(); loadBookingPrepaid(); });
     document.getElementById('bookingDiscount').addEventListener('input', function () { bookingUi.autoDiscount = null; bookingRecalculate(); loadBookingPrepaid(); });
     document.getElementById('bookingFilterDate').addEventListener('change', loadBookings);
-    document.getElementById('bookingDate').addEventListener('change', function () { document.getElementById('bookingFilterDate').value = this.value; loadBookings(); loadBookingAvailability(); });
+    document.getElementById('bookingDate').addEventListener('change', function () {
+      document.getElementById('bookingFilterDate').value = this.value;
+      loadBookingOptionsForDate(function () { loadBookings(); loadBookingAvailability(); });
+    });
     document.getElementById('bookingStart').addEventListener('change', loadBookingAvailability);
     document.getElementById('bookingEnd').addEventListener('change', loadBookingAvailability);
     const technicianBooking = document.getElementById('technicianAssessmentBooking');

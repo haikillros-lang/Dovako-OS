@@ -115,13 +115,80 @@
   });
 </script>
 <script>
-  const leaveUi = { items: [], employees: [], editingId: null, employeesLoaded: false, searchTimer: null };
+  const leaveUi = { items: [], employees: [], editingId: null, employeesLoaded: false, searchTimer: null, pickerTarget: '', pickerMonth: null };
 
   function leaveCanManage() { return noticeCanManage(); }
   function leaveDateInput(value) { return dateUi.display(value); }
   function leaveDateLabel(value) {
     if (!value) return '';
     return dateUi.display(value);
+  }
+
+  function leaveDateKey(value) {
+    const date = dateUi.parse(value);
+    return date ? date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0') : '';
+  }
+
+  function leaveMonthValue(date) {
+    return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+  }
+
+  function openLeaveDatePicker(target) {
+    const form = document.getElementById('leaveForm');
+    if (!form || !form.elements[target]) return;
+    const selected = dateUi.parse(form.elements[target].value) || new Date();
+    leaveUi.pickerTarget = target;
+    leaveUi.pickerMonth = new Date(selected.getFullYear(), selected.getMonth(), 1);
+    document.getElementById('leaveDatePicker').classList.remove('hidden');
+    renderLeaveDatePicker();
+  }
+
+  function closeLeaveDatePicker() {
+    leaveUi.pickerTarget = '';
+    document.getElementById('leaveDatePicker').classList.add('hidden');
+  }
+
+  function moveLeaveDatePicker(months) {
+    const current = leaveUi.pickerMonth || new Date();
+    leaveUi.pickerMonth = new Date(current.getFullYear(), current.getMonth() + Number(months || 0), 1);
+    renderLeaveDatePicker();
+  }
+
+  function renderLeaveDatePicker() {
+    const month = leaveUi.pickerMonth || new Date();
+    const year = month.getFullYear();
+    const monthIndex = month.getMonth();
+    const firstDay = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+    const days = new Date(year, monthIndex + 1, 0).getDate();
+    const form = document.getElementById('leaveForm');
+    const start = leaveDateKey(form.elements.StartDate.value);
+    const end = leaveDateKey(form.elements.EndDate.value);
+    const today = leaveDateKey(new Date());
+    document.getElementById('leavePickerMonthLabel').textContent = new Intl.DateTimeFormat('vi-VN', { month: 'long', year: 'numeric' }).format(month);
+    const cells = [];
+    for (let index = 0; index < firstDay; index += 1) cells.push('<td class="outside-month"></td>');
+    for (let day = 1; day <= days; day += 1) {
+      const key = year + '-' + String(monthIndex + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      const classes = [key === today ? 'today' : '', key === start ? 'selected-start' : '', key === end ? 'selected-end' : '', start && end && key > start && key < end ? 'selected-range' : ''].filter(Boolean).join(' ');
+      cells.push('<td><button type="button" class="' + classes + '" onclick="selectLeavePickerDate(\'' + key + '\')">' + day + '</button></td>');
+    }
+    while (cells.length % 7) cells.push('<td class="outside-month"></td>');
+    const body = document.getElementById('leavePickerCalendarBody');
+    let rows = '';
+    for (let index = 0; index < cells.length; index += 7) rows += '<tr>' + cells.slice(index, index + 7).join('') + '</tr>';
+    body.innerHTML = rows;
+  }
+
+  function selectLeavePickerDate(key) {
+    const form = document.getElementById('leaveForm');
+    if (!leaveUi.pickerTarget || !form) return;
+    const target = leaveUi.pickerTarget;
+    form.elements[target].value = dateUi.display(key);
+    const start = leaveDateKey(form.elements.StartDate.value);
+    const end = leaveDateKey(form.elements.EndDate.value);
+    if (target === 'StartDate' && end && key > end) form.elements.EndDate.value = dateUi.display(key);
+    if (target === 'EndDate' && start && key < start) form.elements.StartDate.value = dateUi.display(key);
+    closeLeaveDatePicker();
   }
 
   function loadLeaveSchedules() {
@@ -172,6 +239,42 @@
         '<div class="notice-item-foot"><span>Mã lịch: ' + app.escape(item.LeaveID) + '</span><span>Cập nhật: ' + app.escape(leaveDateLabel(item.UpdatedDate)) + (item.UpdatedBy ? ' · ' + app.escape(item.UpdatedBy) : '') + '</span></div>' + actions +
         '</article>';
     }).join('') : '<div class="empty-state">Không có lịch nghỉ phù hợp.</div>';
+    renderLeaveMonthCalendar();
+  }
+
+  function renderLeaveMonthCalendar() {
+    const container = document.getElementById('leaveMonthCalendar');
+    const monthInput = document.getElementById('leaveMonth');
+    if (!container || !monthInput || !/^\d{4}-\d{2}$/.test(monthInput.value)) return;
+    const parts = monthInput.value.split('-').map(Number);
+    const year = parts[0];
+    const monthIndex = parts[1] - 1;
+    const firstDay = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+    const days = new Date(year, monthIndex + 1, 0).getDate();
+    const today = leaveDateKey(new Date());
+    const recordMap = {};
+    leaveUi.items.filter(function (item) { return item.Status !== 'Lưu trữ'; }).forEach(function (item) {
+      const start = leaveDateKey(item.StartDate);
+      const end = leaveDateKey(item.EndDate || item.StartDate);
+      for (let day = new Date(year, monthIndex, 1); day.getMonth() === monthIndex; day.setDate(day.getDate() + 1)) {
+        const key = leaveDateKey(day);
+        if (start <= key && end >= key) (recordMap[key] = recordMap[key] || []).push(item);
+      }
+    });
+    const cells = [];
+    for (let index = 0; index < firstDay; index += 1) cells.push('<td class="outside-month"></td>');
+    for (let day = 1; day <= days; day += 1) {
+      const key = year + '-' + String(monthIndex + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+      const records = recordMap[key] || [];
+      const lines = records.slice(0, 3).map(function (item) {
+        return '<span class="leave-calendar-name' + (item.Status === 'Nháp' ? ' draft' : '') + '">' + app.escape(item.EmployeeName) + '</span>';
+      }).join('') + (records.length > 3 ? '<span class="leave-calendar-more">+' + (records.length - 3) + '</span>' : '');
+      cells.push('<td class="leave-calendar-day' + (key === today ? ' today' : '') + (records.length ? ' has-leave' : '') + '"><strong>' + day + '</strong><div class="leave-calendar-names">' + lines + '</div></td>');
+    }
+    while (cells.length % 7) cells.push('<td class="outside-month"></td>');
+    let rows = '';
+    for (let index = 0; index < cells.length; index += 7) rows += '<tr>' + cells.slice(index, index + 7).join('') + '</tr>';
+    container.innerHTML = '<h3>Ngày nghỉ trong tháng ' + app.escape(String(parts[1]).padStart(2, '0') + '/' + year) + '</h3><div class="leave-calendar-scroll"><table class="leave-month-calendar"><thead><tr><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th>CN</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
   }
 
   function editLeaveUi(id) {
@@ -187,6 +290,7 @@
     document.getElementById('leaveEditorTitle').textContent = 'Cập nhật lịch nghỉ ' + id;
     document.getElementById('saveLeaveButton').textContent = 'Lưu thay đổi';
     document.getElementById('cancelLeaveEditButton').classList.remove('hidden');
+    closeLeaveDatePicker();
     form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -201,6 +305,7 @@
     document.getElementById('leaveEditorTitle').textContent = 'Cập nhật lịch nghỉ nhân viên';
     document.getElementById('saveLeaveButton').textContent = 'Đăng lịch nghỉ';
     document.getElementById('cancelLeaveEditButton').classList.add('hidden');
+    closeLeaveDatePicker();
   }
 
   function archiveLeaveUi(id) {
@@ -215,7 +320,7 @@
   document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('leaveForm');
     const month = document.getElementById('leaveMonth');
-    if (month) month.value = new Date().toISOString().slice(0, 7);
+    if (month) month.value = leaveMonthValue(new Date());
     if (form) {
       cancelLeaveEditUi();
       form.addEventListener('submit', function (event) {

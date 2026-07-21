@@ -61,6 +61,29 @@ class LeaveService {
     return records;
   }
 
+  /**
+   * Returns a lookup of staff who have a published leave schedule on a day.
+   * Booking uses this on both the form and the server-side final validation.
+   */
+  static employeeIdsOnLeave(date) {
+    this.initialize();
+    const day = this.dateKey(date);
+    if (!day) return {};
+    return Database.findAll(this.TABLE).reduce(function (result, item) {
+      if (item.Status !== 'Đã đăng') return result;
+      const startDate = LeaveService.dateKey(item.StartDate);
+      const endDate = LeaveService.dateKey(item.EndDate || item.StartDate);
+      if (startDate && endDate && startDate <= day && endDate >= day) {
+        result[String(item.EmployeeID)] = true;
+      }
+      return result;
+    }, {});
+  }
+
+  static isEmployeeOnLeave(employeeId, date) {
+    return Boolean(this.employeeIdsOnLeave(date)[String(employeeId)]);
+  }
+
   static create(session, input) {
     this.assertManager(session);
     this.initialize();
