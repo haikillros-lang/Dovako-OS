@@ -1,0 +1,20 @@
+<div class="notice-board-layout">
+  <section class="panel notice-editor" data-roles="Admin,Manager">
+    <div class="panel-head compact"><div><h2 id="noticeEditorTitle">Cập nhật bảng nội bộ</h2><p>Đăng thông báo, quy định, quy trình hoặc khuyến mãi cho nhân viên.</p></div></div>
+    <form id="noticeForm" class="notice-form">
+      <div class="form-grid">
+        <label class="form-field"><span>Loại nội dung <b>*</b></span><select name="Category" required><option value="Thông báo">Thông báo</option><option value="Quy định">Quy định</option><option value="Quy trình">Quy trình</option><option value="Khuyến mãi">Khuyến mãi</option></select></label>
+        <label class="form-field"><span>Trạng thái <b>*</b></span><select name="Status" required><option value="Đã đăng">Đã đăng</option><option value="Nháp">Nháp</option><option value="Lưu trữ">Lưu trữ</option></select></label>
+        <label class="form-field wide"><span>Tiêu đề <b>*</b></span><input name="Title" maxlength="160" required placeholder="Ví dụ: Quy trình đón khách mới"></label>
+        <label class="form-field"><span>Ngày hiệu lực <b>*</b></span><input name="EffectiveDate" type="date" required></label>
+        <label class="form-field"><span>Ngày hết hiệu lực</span><input name="ExpiryDate" type="date"></label>
+        <label class="form-field wide"><span>Nội dung <b>*</b></span><textarea name="Content" rows="10" maxlength="10000" required placeholder="Nhập nội dung chi tiết để nhân viên thực hiện..."></textarea></label>
+        <div class="form-actions wide notice-form-actions"><button id="saveNoticeButton" class="button primary" type="submit">Đăng nội dung</button><button id="cancelNoticeEditButton" class="button secondary hidden" type="button" onclick="cancelNoticeEditUi()">Hủy sửa</button></div>
+      </div>
+    </form>
+  </section>
+  <section class="panel notice-list-panel">
+    <div class="panel-head"><div><h2>Bảng thông báo nội bộ</h2><p id="noticeListSummary">Đang tải nội dung...</p></div><div class="notice-filters"><select id="noticeCategoryFilter" aria-label="Lọc loại nội dung" onchange="loadNotices()"><option value="">Tất cả loại</option><option value="Thông báo">Thông báo</option><option value="Quy định">Quy định</option><option value="Quy trình">Quy trình</option><option value="Khuyến mãi">Khuyến mãi</option></select><select id="noticeStatusFilter" data-roles="Admin,Manager" aria-label="Lọc trạng thái" onchange="loadNotices()"><option value="">Mọi trạng thái</option><option value="Đã đăng">Đã đăng</option><option value="Nháp">Nháp</option><option value="Lưu trữ">Lưu trữ</option></select><input id="noticeSearch" class="panel-search" type="search" placeholder="Tìm tiêu đề, nội dung" aria-label="Tìm nội dung"></div></div>
+    <div id="noticeList" class="notice-list" aria-live="polite"><div class="empty-state">Đang tải nội dung...</div></div>
+  </section>
+</div>

@@ -70,9 +70,11 @@ const CONFIG = Object.freeze({
 
     SETTINGS: "SETTINGS",
 
-    LOGS: "LOGS"
+    LOGS: "LOGS",
 
-    ,USERS: "USERS"
+    USERS: "USERS",
+
+    NOTICES: "NOTICES"
 
   },
 
@@ -206,9 +208,11 @@ const CONFIG = Object.freeze({
 
     SERVICE: "DV",
 
-    FILE: "FL"
+    FILE: "FL",
 
-    ,PREPAID_CARD: "PT"
+    NOTICE: "TB",
+
+    PREPAID_CARD: "PT"
 
     ,PREPAID_USAGE: "PU"
 

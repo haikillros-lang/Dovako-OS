@@ -21,7 +21,8 @@ class SystemSetup {
       PREPAID_USAGE: PrepaidService.USAGE_HEADERS,
       PREPAID_PLANS: PrepaidService.PLAN_HEADERS,
       LOGS: AppLogger.HEADERS,
-      USERS: AuthService.HEADERS
+      USERS: AuthService.HEADERS,
+      NOTICES: NoticeService.HEADERS
     };
   }
 

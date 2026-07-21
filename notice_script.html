@@ -1,0 +1,118 @@
+<script>
+  const noticeUi = { items: [], editingId: null, searchTimer: null };
+
+  function noticeCanManage() {
+    return Boolean(authUi.user) && ['Admin', 'Manager'].indexOf(authUi.user.Role) !== -1;
+  }
+
+  function noticeDateInput(value) { return value ? String(value).slice(0, 10) : ''; }
+
+  function noticeDateLabel(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '' : new Intl.DateTimeFormat('vi-VN', {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    }).format(date);
+  }
+
+  function loadNotices() {
+    const list = document.getElementById('noticeList');
+    if (!list) return;
+    list.innerHTML = '<div class="empty-state">Đang tải nội dung...</div>';
+    const options = {
+      Category: document.getElementById('noticeCategoryFilter').value,
+      Status: noticeCanManage() ? document.getElementById('noticeStatusFilter').value : '',
+      query: document.getElementById('noticeSearch').value
+    };
+    apiCall('getNotices', [options], renderNotices, function (error) {
+      list.innerHTML = '<div class="empty-state">Không tải được nội dung.</div>';
+      app.toast(error && error.message ? error.message : 'Không tải được bảng thông báo.', 'error');
+    });
+  }
+
+  function renderNotices(items) {
+    noticeUi.items = items || [];
+    const canManage = noticeCanManage();
+    document.getElementById('noticeListSummary').textContent = noticeUi.items.length + ' nội dung' + (canManage ? ' đang quản lý' : ' đang hiệu lực');
+    document.getElementById('noticeList').innerHTML = noticeUi.items.length ? noticeUi.items.map(function (item) {
+      const schedule = 'Hiệu lực: ' + noticeDateLabel(item.EffectiveDate) + (item.ExpiryDate ? ' · đến ' + noticeDateLabel(item.ExpiryDate) : '');
+      const actions = canManage
+        ? '<div class="notice-actions"><button class="text-button" type="button" onclick="editNoticeUi(\'' + app.escape(item.NoticeID) + '\')">Sửa</button>' +
+          (item.Status !== 'Lưu trữ' ? '<button class="icon-button danger" type="button" onclick="archiveNoticeUi(\'' + app.escape(item.NoticeID) + '\')">Lưu trữ</button>' : '') + '</div>'
+        : '';
+      return '<article class="notice-item notice-' + app.escape(item.Status === 'Lưu trữ' ? 'archived' : 'active') + '">' +
+        '<div class="notice-item-head"><div><span class="notice-category">' + app.escape(item.Category) + '</span><h3>' + app.escape(item.Title) + '</h3></div><span class="status-chip' + (item.Status === 'Lưu trữ' ? ' inactive' : item.Status === 'Nháp' ? ' danger' : '') + '">' + app.escape(item.Status) + '</span></div>' +
+        '<p class="notice-content">' + app.escape(item.Content).replace(/\n/g, '<br>') + '</p>' +
+        '<div class="notice-item-foot"><span>' + app.escape(schedule) + '</span><span>Cập nhật: ' + app.escape(noticeDateLabel(item.UpdatedDate)) + (item.UpdatedBy ? ' · ' + app.escape(item.UpdatedBy) : '') + '</span></div>' + actions +
+        '</article>';
+    }).join('') : '<div class="empty-state">Chưa có nội dung phù hợp.</div>';
+  }
+
+  function editNoticeUi(id) {
+    const item = noticeUi.items.find(function (value) { return value.NoticeID === id; });
+    if (!item) { app.toast('Không tìm thấy nội dung cần sửa.', 'error'); return; }
+    const form = document.getElementById('noticeForm');
+    noticeUi.editingId = id;
+    form.elements.Category.value = item.Category || 'Thông báo';
+    form.elements.Status.value = item.Status || 'Đã đăng';
+    form.elements.Title.value = item.Title || '';
+    form.elements.EffectiveDate.value = noticeDateInput(item.EffectiveDate);
+    form.elements.ExpiryDate.value = noticeDateInput(item.ExpiryDate);
+    form.elements.Content.value = item.Content || '';
+    document.getElementById('noticeEditorTitle').textContent = 'Cập nhật nội dung ' + id;
+    document.getElementById('saveNoticeButton').textContent = 'Lưu thay đổi';
+    document.getElementById('cancelNoticeEditButton').classList.remove('hidden');
+    form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    form.elements.Title.focus();
+  }
+
+  function cancelNoticeEditUi() {
+    noticeUi.editingId = null;
+    const form = document.getElementById('noticeForm');
+    form.reset();
+    form.elements.EffectiveDate.value = noticeDateInput(new Date().toISOString());
+    form.elements.Status.value = 'Đã đăng';
+    document.getElementById('noticeEditorTitle').textContent = 'Cập nhật bảng nội bộ';
+    document.getElementById('saveNoticeButton').textContent = 'Đăng nội dung';
+    document.getElementById('cancelNoticeEditButton').classList.add('hidden');
+  }
+
+  function archiveNoticeUi(id) {
+    if (!window.confirm('Lưu trữ nội dung này? Nhân viên sẽ không còn thấy nội dung, nhưng Admin và Quản lý vẫn có thể xem lại.')) return;
+    apiCall('archiveNotice', [id], function () {
+      app.toast('Đã lưu trữ nội dung.');
+      if (noticeUi.editingId === id) cancelNoticeEditUi();
+      loadNotices();
+    }, function (error) { app.toast(error.message || 'Không thể lưu trữ nội dung.', 'error'); });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('noticeForm');
+    if (form) {
+      form.elements.EffectiveDate.value = noticeDateInput(new Date().toISOString());
+      form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const data = Object.fromEntries(new FormData(form).entries());
+        const button = document.getElementById('saveNoticeButton');
+        button.disabled = true;
+        const editingId = noticeUi.editingId;
+        const method = editingId ? 'updateNotice' : 'createNotice';
+        const args = editingId ? [editingId, data] : [data];
+        apiCall(method, args, function () {
+          button.disabled = false;
+          app.toast(editingId ? 'Đã cập nhật nội dung.' : 'Đã đăng nội dung.');
+          cancelNoticeEditUi();
+          loadNotices();
+        }, function (error) {
+          button.disabled = false;
+          app.toast(error.message || 'Không thể lưu nội dung.', 'error');
+        });
+      });
+    }
+    const search = document.getElementById('noticeSearch');
+    if (search) search.addEventListener('input', function () {
+      window.clearTimeout(noticeUi.searchTimer);
+      noticeUi.searchTimer = window.setTimeout(loadNotices, 250);
+    });
+  });
+</script>
