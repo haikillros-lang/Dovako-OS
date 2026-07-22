@@ -23,7 +23,7 @@
   }
 
   function loadBookingOptionsForDate(done) {
-    const date = document.getElementById('bookingDate').value || dateUi.today();
+    const date = document.getElementById('bookingDate').value || dateUi.todayIso();
     apiCall('getBookingOptions', [{ date: date }], function (options) {
       bookingUi.options = options || bookingUi.options;
       renderBookingOptions();
@@ -685,7 +685,7 @@ function updateBookingGroupPricing() {
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    const today = dateUi.today();
+    const today = dateUi.todayIso();
     document.getElementById('bookingDate').value = today;
     document.getElementById('bookingFilterDate').value = today;
     document.getElementById('bookingForm').addEventListener('submit', function (event) {

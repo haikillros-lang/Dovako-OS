@@ -92,9 +92,26 @@
           const date = this.parse(value);
           return date ? this.pad(date.getDate()) + '/' + this.pad(date.getMonth() + 1) + '/' + date.getFullYear() : '';
         },
+        iso(value) {
+          const date = this.parse(value);
+          return date ? date.getFullYear() + '-' + this.pad(date.getMonth() + 1) + '-' + this.pad(date.getDate()) : '';
+        },
         today() { return this.display(new Date()); },
+        todayIso() { return this.iso(new Date()); },
         bind() {
           document.querySelectorAll('input[data-date-format="vi"]').forEach(function (input) {
+            if (!input.closest('.leave-date-control')) {
+              const value = dateUi.iso(input.value);
+              input.type = 'date';
+              input.lang = 'vi';
+              input.removeAttribute('inputmode');
+              input.removeAttribute('maxlength');
+              input.removeAttribute('pattern');
+              input.removeAttribute('placeholder');
+              input.removeAttribute('data-date-format');
+              if (value) input.value = value;
+              return;
+            }
             const normalize = function () {
               if (!input.value) return;
               const formatted = dateUi.display(input.value);

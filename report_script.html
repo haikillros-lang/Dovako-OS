@@ -1,5 +1,5 @@
 <script>
-  function reportDateValue(date) { return dateUi.display(date); }
+  function reportDateValue(date) { return dateUi.iso(date); }
   function reportRows(rows, emptyText) {
     if (!rows || !rows.length) return '<tr><td colspan="3" class="table-empty">' + app.escape(emptyText) + '</td></tr>';
     return rows.map(function (row) { return '<tr><td><strong>' + app.escape(row.name) + '</strong></td><td>' + app.escape(row.bookings) + '</td><td>' + app.currency(row.revenue) + '</td></tr>'; }).join('');

@@ -42,7 +42,7 @@
       document.getElementById('cancelEditButton').classList.remove('hidden');
       setFormValue('customerFullName', customer.FullName);
       setFormValue('customerPhone', customer.Phone);
-      setFormValue('customerBirthday', dateUi.display(customer.Birthday));
+      setFormValue('customerBirthday', dateUi.iso(customer.Birthday));
       setFormValue('customerGender', customer.Gender);
       setFormValue('customerOccupation', customer.Occupation);
       setFormValue('customerSource', customer.Source);
