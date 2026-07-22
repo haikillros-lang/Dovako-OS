@@ -27,9 +27,10 @@
       <label class="form-field"><span>Giường <b>*</b></span><select id="bookingBed" name="BedID" required><option value="">Chọn giường</option></select></label>
       <label class="form-field"><span>Giờ bắt đầu <b>*</b></span><input id="bookingStart" name="StartTime" type="time" value="09:00" required></label>
       <label class="form-field"><span>Giờ kết thúc <b>*</b></span><input id="bookingEnd" name="EndTime" type="time" value="10:00" required></label>
-      <label class="form-field"><span>Giá dịch vụ</span><input id="bookingPrice" name="Price" inputmode="numeric" type="number" min="0" value="0" required></label>
-      <label class="form-field"><span>Giảm giá</span><input id="bookingDiscount" name="Discount" inputmode="numeric" type="number" min="0" value="0"></label>
-      <label class="form-field wide"><span>Thành tiền</span><input id="bookingFinalPrice" name="FinalPrice" type="number" min="0" value="0" readonly></label>
+      <label class="form-field"><span>Giá dịch vụ (mỗi khách)</span><input id="bookingPrice" name="Price" inputmode="numeric" type="number" min="0" value="0" required></label>
+      <label class="form-field"><span>Giảm giá (mỗi khách)</span><input id="bookingDiscount" name="Discount" inputmode="numeric" type="number" min="0" value="0"></label>
+      <label class="form-field wide"><span>Thành tiền (mỗi khách)</span><input id="bookingFinalPrice" name="FinalPrice" type="number" min="0" value="0" readonly></label>
+      <div id="bookingGroupPricing" class="booking-group-pricing wide hidden"></div>
       <label class="form-field wide"><span>Ghi chú</span><textarea id="bookingNote" name="Note" rows="2" maxlength="2000" placeholder="Đã gọi xác nhận, lưu ý vùng cơ thể..."></textarea></label>
       <div class="form-actions wide"><button id="saveBookingButton" class="button primary" type="submit">Tạo Booking</button></div>
     </form>

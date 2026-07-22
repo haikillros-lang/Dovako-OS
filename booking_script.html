@@ -106,6 +106,7 @@
     }
     renderGroupAssignments();
     refreshBookingResourceChoices();
+    updateBookingGroupPricing();
   }
 
   function searchBookingGroupGuests() {
@@ -150,12 +151,14 @@
     bookingUi.groupGuestResults = [];
     renderGroupAssignments();
     refreshBookingResourceChoices();
+    updateBookingGroupPricing();
   }
 
   function removeBookingGroupGuest(index) {
     bookingUi.groupParticipants.splice(index, 1);
     renderGroupAssignments();
     refreshBookingResourceChoices();
+    updateBookingGroupPricing();
   }
 
   function updateBookingGroupGuest(index, field, value) {
@@ -566,11 +569,48 @@
 
   function handleBookingError(error) { app.toast(error && error.message ? error.message : 'Không thể xử lý booking.', 'error'); }
 
-  function bookingRecalculate() {
-    const price = Number(document.getElementById('bookingPrice').value || 0);
-    const discount = Number(document.getElementById('bookingDiscount').value || 0);
-    document.getElementById('bookingFinalPrice').value = Math.max(0, price - discount);
+function bookingRecalculate() {
+  const price = Number(document.getElementById('bookingPrice').value || 0);
+  const discount = Number(document.getElementById('bookingDiscount').value || 0);
+  document.getElementById('bookingFinalPrice').value = Math.max(0, price - discount);
+  updateBookingGroupPricing();
+}
+
+function bookingGroupServiceUserCount() {
+  const groupEnabled = document.getElementById('bookingGroupEnabled');
+  return groupEnabled && groupEnabled.checked
+    ? 1 + bookingUi.groupParticipants.length
+    : 1;
+}
+
+function updateBookingGroupPricing() {
+  const panel = document.getElementById('bookingGroupPricing');
+  if (!panel) return;
+
+  const customerCount = bookingGroupServiceUserCount();
+  if (customerCount <= 1) {
+    panel.classList.add('hidden');
+    panel.innerHTML = '';
+    return;
   }
+
+  const pricePerCustomer = Number(document.getElementById('bookingPrice').value || 0);
+  const discountPerCustomer = Number(document.getElementById('bookingDiscount').value || 0);
+  const amountPerCustomer = Math.max(0, pricePerCustomer - discountPerCustomer);
+  const totalBeforeDiscount = pricePerCustomer * customerCount;
+  const totalDiscount = discountPerCustomer * customerCount;
+  const totalAmount = amountPerCustomer * customerCount;
+
+  panel.innerHTML =
+    '<strong>Tổng tiền lịch nhóm · ' + customerCount + ' khách</strong>' +
+    '<span>' + app.currency(pricePerCustomer) + ' × ' + customerCount +
+      ' = ' + app.currency(totalBeforeDiscount) +
+      (totalDiscount > 0 ? ' · giảm ' + app.currency(totalDiscount) : '') +
+    '</span>' +
+    '<b>Cần thu: ' + app.currency(totalAmount) + '</b>' +
+    '<small>Thẻ trả trước được trừ riêng cho từng khách khi hoàn thành dịch vụ.</small>';
+  panel.classList.remove('hidden');
+}
 
   function applyAutomaticBookingDiscount(amount) {
     const field = document.getElementById('bookingDiscount');
