@@ -8,6 +8,7 @@ class SystemSetup {
     return {
       CUSTOMERS: CustomerService.HEADERS,
       BOOKINGS: BookingService.HEADERS,
+      BOOKING_ASSIGNMENTS: BookingService.ASSIGNMENT_HEADERS,
       EMPLOYEES: [
         'EmployeeID', 'FullName', 'Phone', 'Role', 'Status', 'CreatedDate', 'UpdatedDate'
       ],

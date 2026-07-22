@@ -54,6 +54,8 @@ const CONFIG = Object.freeze({
 
     BOOKINGS: "BOOKINGS",
 
+    BOOKING_ASSIGNMENTS: "BOOKING_ASSIGNMENTS",
+
     EMPLOYEES: "EMPLOYEES",
 
     SERVICES: "SERVICES",
@@ -216,7 +218,9 @@ const CONFIG = Object.freeze({
 
     LEAVE: "NP",
 
-    PREPAID_CARD: "PT"
+    PREPAID_CARD: "PT",
+
+    BOOKING_ASSIGNMENT: "BA"
 
     ,PREPAID_USAGE: "PU"
 

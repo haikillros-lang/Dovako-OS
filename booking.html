@@ -5,12 +5,23 @@
     <form id="bookingForm" class="form-grid" novalidate>
       <label class="form-field wide customer-picker"><span>Tìm khách hàng <b>*</b></span><input id="bookingCustomerSearch" autocomplete="off" placeholder="Nhập tên, SĐT hoặc mã khách (tối thiểu 2 ký tự)"><input id="bookingCustomer" name="CustomerID" type="hidden" required><div id="bookingCustomerResults" class="customer-picker-results hidden"></div><small id="bookingCustomerSelected" class="picker-hint">Chưa chọn khách hàng.</small></label>
       <div class="form-field wide">
+        <label class="checkbox-field"><input id="bookingGroupEnabled" type="checkbox"><span>Đặt lịch nhóm / người đi cùng</span></label>
+        <small class="picker-hint">Mỗi người đi cùng có Booking, lịch sử và trạng thái riêng; có thể dùng chung thẻ trả trước của chủ thẻ.</small>
+      </div>
+      <label id="bookingGroupGuestField" class="form-field wide customer-picker hidden"><span>Thêm người đi cùng</span><input id="bookingGroupGuestSearch" autocomplete="off" placeholder="Tìm tên, SĐT hoặc mã khách để thêm vào nhóm"><div id="bookingGroupGuestResults" class="customer-picker-results hidden"></div><small class="picker-hint">Chọn từng khách trong kết quả; mỗi người cần một kỹ thuật viên và một giường riêng.</small></label>
+      <div id="bookingGroupAssignments" class="wide hidden"></div>
+      <div class="form-field wide">
         <label class="checkbox-field"><input id="bookingUseFamilyCard" type="checkbox"><span>Dùng thẻ trả trước của người thân</span></label>
         <small class="picker-hint">Booking thuộc về người sử dụng dịch vụ; hệ thống chỉ trừ số dư hoặc số buổi từ chủ thẻ được chọn.</small>
       </div>
       <label id="bookingCardOwnerField" class="form-field wide customer-picker hidden"><span>Tìm chủ thẻ <b>*</b></span><input id="bookingCardOwnerSearch" autocomplete="off" placeholder="Nhập tên, SĐT hoặc mã chủ thẻ (tối thiểu 2 ký tự)"><input id="bookingCardOwner" name="CardOwnerCustomerID" type="hidden"><div id="bookingCardOwnerResults" class="customer-picker-results hidden"></div><small id="bookingCardOwnerSelected" class="picker-hint">Chưa chọn chủ thẻ.</small></label>
       <label class="form-field"><span>Dịch vụ <b>*</b></span><select id="bookingService" name="ServiceID" required><option value="">Chọn dịch vụ</option></select></label>
-      <label class="form-field"><span>Nhân viên <b>*</b></span><select id="bookingEmployee" name="EmployeeID" required><option value="">Chọn nhân viên</option></select></label>
+      <label class="form-field"><span>Kỹ thuật viên phụ trách <b>*</b></span><select id="bookingEmployee" name="EmployeeID" required><option value="">Chọn nhân viên</option></select></label>
+      <div class="form-field wide">
+        <label class="checkbox-field"><input id="bookingMultipleStaff" type="checkbox"><span>Nhiều kỹ thuật viên cùng phục vụ khách này</span></label>
+        <small class="picker-hint">Các kỹ thuật viên hỗ trợ phải trống trong cùng khung giờ; Booking chỉ tính doanh thu một lần.</small>
+      </div>
+      <div id="bookingAdditionalStaffField" class="form-field wide hidden"><span>Kỹ thuật viên hỗ trợ</span><div id="bookingAdditionalStaffOptions" class="staff-choice-list"></div></div>
       <div id="bookingPrepaidNotice" class="notice wide hidden"></div>
       <label class="form-field"><span>Ngày <b>*</b></span><input id="bookingDate" name="BookingDate" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi" required></label>
       <label class="form-field"><span>Giường <b>*</b></span><select id="bookingBed" name="BedID" required><option value="">Chọn giường</option></select></label>

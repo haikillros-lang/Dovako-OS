@@ -10,15 +10,28 @@ class BookingService {
     return [
       'BookingID', 'CustomerID', 'EmployeeID', 'ServiceID', 'BedID',
       'BookingDate', 'StartTime', 'EndTime', 'Status', 'Price', 'Discount',
-      'FinalPrice', 'Note', 'CreatedDate', 'UpdatedDate', 'CardOwnerCustomerID'
+      'FinalPrice', 'Note', 'CreatedDate', 'UpdatedDate', 'CardOwnerCustomerID',
+      'BookingGroupID'
     ];
+  }
+
+  static get ASSIGNMENT_TABLE() { return CONFIG.SHEETS.BOOKING_ASSIGNMENTS; }
+
+  static get ASSIGNMENT_HEADERS() {
+    return ['AssignmentID', 'BookingID', 'EmployeeID', 'AssignmentRole', 'CreatedDate', 'UpdatedDate'];
   }
 
   static initialize() {
     // Add new fields without changing any booking already recorded.
     Database.ensureColumns(this.TABLE, this.HEADERS);
+    Database.ensureTable(this.ASSIGNMENT_TABLE, this.ASSIGNMENT_HEADERS);
     this.ensureVietnamTimezone();
-    return { sheet: this.TABLE, headers: this.HEADERS.slice() };
+    return {
+      sheet: this.TABLE,
+      headers: this.HEADERS.slice(),
+      assignmentSheet: this.ASSIGNMENT_TABLE,
+      assignmentHeaders: this.ASSIGNMENT_HEADERS.slice()
+    };
   }
 
   /** Keeps the shared Google Sheet on the application's Vietnam time zone. */
@@ -35,7 +48,7 @@ class BookingService {
     const date = settings.date ? Validator.date(settings.date, 'Ngày booking') : null;
     const customerId = settings.customerId ? Validator.required(settings.customerId, 'Mã khách hàng') : '';
     const includeCancelled = settings.includeCancelled === true;
-    let bookings = this.readAll();
+    let bookings = this.attachAssignments(this.readAll());
 
     if (date) bookings = bookings.filter(function (booking) {
       return BookingService.sameDay(booking.BookingDate, date);
@@ -52,7 +65,8 @@ class BookingService {
   static get(bookingId) {
     this.initialize();
     const id = Validator.required(bookingId, 'Mã booking');
-    return this.readAll().find(function (booking) { return booking.BookingID === id; }) || null;
+    const booking = this.readAll().find(function (item) { return item.BookingID === id; }) || null;
+    return booking ? this.attachAssignments([booking])[0] : null;
   }
 
   static today() {
@@ -100,7 +114,10 @@ class BookingService {
       const startTime = this.minutesToTime(start);
       const endTime = this.minutesToTime(end);
       const overlapping = bookings.filter(function (booking) { return BookingService.timesOverlap(booking.StartTime, booking.EndTime, startTime, endTime); });
-      const busyEmployees = overlapping.reduce(function (map, booking) { map[booking.EmployeeID] = true; return map; }, {});
+      const busyEmployees = overlapping.reduce(function (map, booking) {
+        BookingService.employeeIdsForBooking(booking).forEach(function (employeeId) { map[employeeId] = true; });
+        return map;
+      }, {});
       const busyBeds = overlapping.reduce(function (map, booking) { map[booking.BedID] = true; return map; }, {});
       const availableEmployees = employees.filter(function (employee) { return !busyEmployees[employee.EmployeeID]; }).map(function (employee) {
         return { EmployeeID: employee.EmployeeID, FullName: employee.FullName, Role: employee.Role || '' };
@@ -112,18 +129,71 @@ class BookingService {
   }
 
   static create(input) {
-    this.initialize();
-    const booking = this.normalizeForCreate(input);
-    this.assertCustomerAvailable(booking.CustomerID);
-    this.assertCardOwnerAvailable(booking.CardOwnerCustomerID);
-    this.assertEmployeeAvailable(booking.EmployeeID, booking.BookingDate);
-    this.assertNoConflict(booking);
+    return this.createBatch([input], '')[0];
+  }
 
-    const saved = Database.insertWithGeneratedId(this.TABLE, CONFIG.PREFIX.BOOKING, booking, {
-      idColumn: 'BookingID', padding: 6
+  /**
+   * Creates one booking per service user under a shared group code.  A group
+   * is used when one person books a time slot for friends or family.  Every
+   * participant retains an individual booking, history, status, and bed.
+   */
+  static createGroup(input) {
+    const data = input || {};
+    const participants = Array.isArray(data.Participants) ? data.Participants : [];
+    if (!participants.length) return { BookingGroupID: '', bookings: [this.create(data)] };
+
+    const base = Object.assign({}, data);
+    delete base.Participants;
+    const groupId = 'BG' + Utilities.getUuid().replace(/-/g, '').slice(0, 12).toUpperCase();
+    const records = [base].concat(participants.map(function (participant) {
+      return Object.assign({}, base, participant || {});
+    }));
+    const saved = this.createBatch(records, groupId);
+    return { BookingGroupID: groupId, bookings: saved };
+  }
+
+  /** Saves a validated set of new bookings while one script lock is held. */
+  static createBatch(inputs, groupId) {
+    this.initialize();
+    if (!Array.isArray(inputs) || !inputs.length) throw new Error('Cần có ít nhất một khách để tạo booking.');
+    const bookings = inputs.map(function (input) {
+      const booking = BookingService.normalizeForCreate(input);
+      booking.BookingGroupID = groupId || '';
+      return booking;
     });
-    this.audit('CREATE', saved.BookingID, this.auditMetadata(saved));
-    return saved;
+
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      this.assertBookingSetAvailable(bookings);
+      const bookingIds = this.nextSequentialIds(this.TABLE, 'BookingID', CONFIG.PREFIX.BOOKING, 6, bookings.length);
+      const assignmentCount = bookings.reduce(function (total, booking) { return total + booking.EmployeeIDs.length; }, 0);
+      const assignmentIds = this.nextSequentialIds(this.ASSIGNMENT_TABLE, 'AssignmentID', CONFIG.PREFIX.BOOKING_ASSIGNMENT, 6, assignmentCount);
+      let assignmentIndex = 0;
+      const saved = bookings.map(function (booking, index) {
+        const bookingId = bookingIds[index];
+        const stored = BookingService.storeBooking(booking, bookingId);
+        const record = Database.insert(BookingService.TABLE, stored);
+        booking.EmployeeIDs.forEach(function (employeeId, employeeIndex) {
+          Database.insert(BookingService.ASSIGNMENT_TABLE, {
+            AssignmentID: assignmentIds[assignmentIndex++],
+            BookingID: bookingId,
+            EmployeeID: employeeId,
+            AssignmentRole: employeeIndex === 0 ? 'Primary' : 'Support',
+            CreatedDate: new Date(),
+            UpdatedDate: new Date()
+          });
+        });
+        return Object.assign({}, record, { EmployeeIDs: booking.EmployeeIDs.slice() });
+      });
+      SpreadsheetApp.flush();
+      saved.forEach(function (booking) {
+        BookingService.audit('CREATE', booking.BookingID, BookingService.auditMetadata(booking));
+      });
+      return this.attachAssignments(saved);
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   static update(bookingId, changes) {
@@ -140,14 +210,23 @@ class BookingService {
       throw new Error('Hãy sử dụng thao tác cập nhật trạng thái booking riêng.');
     }
 
-    const updated = this.normalizeForUpdate(Object.assign({}, current, this.pickEditableFields(changes)), current);
+    const editable = this.pickEditableFields(changes);
+    const merged = Object.assign({}, current, editable);
+    // If a caller replaces only the lead technician, do not silently retain
+    // the previous lead as an assistant. Explicit EmployeeIDs still wins.
+    if (Object.prototype.hasOwnProperty.call(editable, 'EmployeeID') &&
+        !Object.prototype.hasOwnProperty.call(editable, 'EmployeeIDs')) {
+      merged.EmployeeIDs = [editable.EmployeeID];
+    }
+    const updated = this.normalizeForUpdate(merged, current);
     this.assertCustomerAvailable(updated.CustomerID);
     this.assertCardOwnerAvailable(updated.CardOwnerCustomerID);
-    this.assertEmployeeAvailable(updated.EmployeeID, updated.BookingDate);
+    this.assertEmployeesAvailable(updated.EmployeeIDs, updated.BookingDate);
     this.assertNoConflict(updated, bookingId);
-    const saved = Database.update(this.TABLE, bookingId, updated, 'BookingID');
+    const saved = Database.update(this.TABLE, bookingId, this.storeBooking(updated, bookingId), 'BookingID');
+    this.replaceAssignments(bookingId, updated.EmployeeIDs);
     this.audit('UPDATE', bookingId, { changedFields: Object.keys(this.pickEditableFields(changes)) });
-    return saved;
+    return this.attachAssignments([saved])[0];
   }
 
   static confirm(bookingId) {
@@ -213,6 +292,8 @@ class BookingService {
       Status: CONFIG.BOOKING_STATUS.PENDING_CONFIRMATION
     }));
     core.CardOwnerCustomerID = this.normalizeCardOwnerId(data.CardOwnerCustomerID, core.CustomerID);
+    core.EmployeeIDs = this.normalizeEmployeeIds(data.EmployeeIDs, core.EmployeeID);
+    core.BookingGroupID = '';
     this.applyPrepaidDiscount(core);
     this.assertPrice(core);
     const now = new Date();
@@ -222,6 +303,8 @@ class BookingService {
   static normalizeForUpdate(data, current) {
     const core = Validator.booking(Object.assign({}, data, { Status: current.Status }));
     core.CardOwnerCustomerID = this.normalizeCardOwnerId(data.CardOwnerCustomerID, core.CustomerID);
+    core.EmployeeIDs = this.normalizeEmployeeIds(data.EmployeeIDs, core.EmployeeID);
+    core.BookingGroupID = current.BookingGroupID || '';
     this.applyPrepaidDiscount(core);
     this.assertPrice(core);
     return Object.assign(core, { CreatedDate: current.CreatedDate, UpdatedDate: new Date() });
@@ -231,7 +314,7 @@ class BookingService {
     const allowed = [
       'CustomerID', 'EmployeeID', 'ServiceID', 'BedID', 'BookingDate',
       'StartTime', 'EndTime', 'Price', 'Discount', 'FinalPrice', 'Note',
-      'CardOwnerCustomerID'
+      'CardOwnerCustomerID', 'EmployeeIDs'
     ];
     return allowed.reduce(function (result, key) {
       if (Object.prototype.hasOwnProperty.call(input, key)) result[key] = input[key];
@@ -280,6 +363,12 @@ class BookingService {
     }
   }
 
+  static assertEmployeesAvailable(employeeIds, date) {
+    this.normalizeEmployeeIds(employeeIds, '').forEach(function (employeeId) {
+      BookingService.assertEmployeeAvailable(employeeId, date);
+    });
+  }
+
   static assertNoConflict(candidate, excludedBookingId) {
     // Read through list() so legacy Sheet time cells are normalized to HH:mm
     // before overlap checking. Direct raw reads can contain 1899-12-30 dates.
@@ -287,7 +376,7 @@ class BookingService {
       if (booking.BookingID === excludedBookingId || BookingService.isUnavailableStatus(booking.Status)) return false;
       if (!BookingService.timesOverlap(booking.StartTime, booking.EndTime, candidate.StartTime, candidate.EndTime)) return false;
       return booking.BedID === candidate.BedID ||
-        booking.EmployeeID === candidate.EmployeeID ||
+        BookingService.employeeIdsOverlap(BookingService.employeeIdsForBooking(booking), BookingService.employeeIdsForBooking(candidate)) ||
         booking.CustomerID === candidate.CustomerID;
     });
 
@@ -296,10 +385,146 @@ class BookingService {
     if (conflict.BedID === candidate.BedID) {
       throw new Error('Giường ' + candidate.BedID + ' đã có lịch ' + conflict.StartTime + '–' + conflict.EndTime + '.');
     }
-    if (conflict.EmployeeID === candidate.EmployeeID) {
+    if (this.employeeIdsOverlap(this.employeeIdsForBooking(conflict), this.employeeIdsForBooking(candidate))) {
       throw new Error('Nhân viên đã có lịch ' + conflict.StartTime + '–' + conflict.EndTime + '.');
     }
     throw new Error('Khách hàng đã có lịch ' + conflict.StartTime + '–' + conflict.EndTime + '.');
+  }
+
+  /** Validates existing schedule conflicts and conflicts inside a new group. */
+  static assertBookingSetAvailable(bookings) {
+    bookings.forEach(function (booking) {
+      BookingService.assertCustomerAvailable(booking.CustomerID);
+      BookingService.assertCardOwnerAvailable(booking.CardOwnerCustomerID);
+      BookingService.assertEmployeesAvailable(booking.EmployeeIDs, booking.BookingDate);
+      BookingService.assertNoConflict(booking);
+    });
+
+    for (let left = 0; left < bookings.length; left += 1) {
+      for (let right = left + 1; right < bookings.length; right += 1) {
+        const first = bookings[left];
+        const second = bookings[right];
+        if (!this.sameDay(first.BookingDate, second.BookingDate) ||
+            !this.timesOverlap(first.StartTime, first.EndTime, second.StartTime, second.EndTime)) continue;
+        if (first.CustomerID === second.CustomerID) {
+          throw new Error('Một khách không thể có hai lịch trùng giờ trong cùng nhóm.');
+        }
+        if (first.BedID === second.BedID) {
+          throw new Error('Các khách trong cùng nhóm không thể dùng chung giường ' + first.BedID + ' cùng giờ.');
+        }
+        if (this.employeeIdsOverlap(this.employeeIdsForBooking(first), this.employeeIdsForBooking(second))) {
+          throw new Error('Một kỹ thuật viên không thể phục vụ hai khách trong cùng nhóm cùng giờ.');
+        }
+      }
+    }
+  }
+
+  /** Converts a multi-select value into distinct employee IDs, primary first. */
+  static normalizeEmployeeIds(value, primaryEmployeeId) {
+    const raw = Array.isArray(value)
+      ? value
+      : (value === null || value === undefined || value === '' ? [] : String(value).split(','));
+    const ids = raw.map(function (item) { return String(item || '').trim(); })
+      .filter(function (item) { return item !== ''; });
+    const primary = String(primaryEmployeeId || '').trim();
+    if (primary) ids.unshift(primary);
+    const unique = ids.filter(function (item, index, all) { return all.indexOf(item) === index; });
+    if (!unique.length) throw new Error('Cần chọn ít nhất một nhân viên.');
+    return unique;
+  }
+
+  static employeeIdsForBooking(booking) {
+    if (!booking) return [];
+    if (Array.isArray(booking.EmployeeIDs) && booking.EmployeeIDs.length) {
+      return this.normalizeEmployeeIds(booking.EmployeeIDs, '');
+    }
+    return booking.EmployeeID ? [String(booking.EmployeeID)] : [];
+  }
+
+  static employeeIdsOverlap(left, right) {
+    const leftIds = this.employeeIdsForBooking({ EmployeeIDs: left });
+    const rightIds = this.employeeIdsForBooking({ EmployeeIDs: right });
+    return leftIds.some(function (employeeId) { return rightIds.indexOf(employeeId) !== -1; });
+  }
+
+  static isEmployeeAssigned(booking, employeeId) {
+    return this.employeeIdsForBooking(booking).indexOf(String(employeeId || '').trim()) !== -1;
+  }
+
+  /** Adds assignment data to records while keeping legacy single-staff rows working. */
+  static attachAssignments(bookings) {
+    if (!Array.isArray(bookings) || !bookings.length) return bookings || [];
+    const assignmentMap = Database.findAll(this.ASSIGNMENT_TABLE).reduce(function (map, assignment) {
+      const bookingId = String(assignment.BookingID || '');
+      if (!bookingId) return map;
+      if (!map[bookingId]) map[bookingId] = [];
+      map[bookingId].push(assignment);
+      return map;
+    }, {});
+    const employeeMap = CatalogService.employees(true).reduce(function (map, employee) {
+      map[String(employee.EmployeeID)] = employee.FullName || employee.EmployeeID;
+      return map;
+    }, {});
+
+    return bookings.map(function (booking) {
+      const assignments = (assignmentMap[String(booking.BookingID)] || []).slice().sort(function (left, right) {
+        return left.AssignmentRole === right.AssignmentRole ? left._rowNumber - right._rowNumber :
+          (left.AssignmentRole === 'Primary' ? -1 : 1);
+      });
+      const employeeIds = assignments.length
+        ? assignments.map(function (assignment) { return String(assignment.EmployeeID); })
+        : (booking.EmployeeID ? [String(booking.EmployeeID)] : []);
+      return Object.assign({}, booking, {
+        EmployeeIDs: employeeIds,
+        EmployeeNames: employeeIds.map(function (employeeId) { return employeeMap[employeeId] || employeeId; })
+      });
+    });
+  }
+
+  /** Produces only the columns that are stored in BOOKINGS. */
+  static storeBooking(booking, bookingId) {
+    const record = {};
+    this.HEADERS.forEach(function (header) {
+      if (header === 'BookingID') record[header] = bookingId || booking.BookingID || '';
+      else record[header] = Object.prototype.hasOwnProperty.call(booking, header) ? booking[header] : '';
+    });
+    return record;
+  }
+
+  /** Calculates several sequential IDs under the caller's script lock. */
+  static nextSequentialIds(sheetName, idColumn, prefix, padding, count) {
+    const pattern = new RegExp('^' + Database.escapeRegExp(prefix) + '(\\d+)$');
+    let highest = Database.findAll(sheetName).reduce(function (max, record) {
+      const match = String(record[idColumn] || '').match(pattern);
+      return match ? Math.max(max, Number(match[1])) : max;
+    }, 0);
+    return Array.from({ length: count }, function () {
+      highest += 1;
+      return prefix + String(highest).padStart(padding, '0');
+    });
+  }
+
+  static replaceAssignments(bookingId, employeeIds) {
+    const lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    try {
+      const ids = this.normalizeEmployeeIds(employeeIds, '');
+      Database.removeWhere(this.ASSIGNMENT_TABLE, { BookingID: bookingId });
+      const assignmentIds = this.nextSequentialIds(this.ASSIGNMENT_TABLE, 'AssignmentID', CONFIG.PREFIX.BOOKING_ASSIGNMENT, 6, ids.length);
+      ids.forEach(function (employeeId, index) {
+        Database.insert(BookingService.ASSIGNMENT_TABLE, {
+          AssignmentID: assignmentIds[index],
+          BookingID: bookingId,
+          EmployeeID: employeeId,
+          AssignmentRole: index === 0 ? 'Primary' : 'Support',
+          CreatedDate: new Date(),
+          UpdatedDate: new Date()
+        });
+      });
+      SpreadsheetApp.flush();
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   static assertStatusTransition(currentStatus, nextStatus) {
@@ -478,6 +703,7 @@ function getBookingOptions(token, input) {
 }
 function getBookingAvailability(token, input) { AuthService.requireSession(token); return Utils.toClient(BookingService.availability(input)); }
 function createBooking(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.create(data)); }
+function createBookingGroup(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.createGroup(data)); }
 function updateBooking(token, bookingId, changes) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.update(bookingId, changes)); }
 function confirmBooking(token, bookingId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.confirm(bookingId)); }
 function checkInBooking(token, bookingId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]); return Utils.toClient(BookingService.checkIn(bookingId)); }

@@ -115,7 +115,7 @@ class DriveService {
     if (!employeeId) throw new Error('Tài khoản kỹ thuật viên chưa liên kết với hồ sơ nhân viên.');
     const booking = BookingService.get(Validator.required(bookingId, 'Mã booking'));
     if (!booking) throw new Error('Không tìm thấy booking.');
-    if (String(booking.EmployeeID || '') !== employeeId) {
+    if (!BookingService.isEmployeeAssigned(booking, employeeId)) {
       throw new Error('Bạn chỉ có thể cập nhật phiếu cho booking được phân công cho mình.');
     }
     return booking;

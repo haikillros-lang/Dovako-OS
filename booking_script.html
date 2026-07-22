@@ -8,7 +8,11 @@
     customerSearchTimer: null,
     cardOwnerResults: [],
     cardOwnerSearchTimer: null,
-    autoDiscount: 0
+    autoDiscount: 0,
+    groupGuestResults: [],
+    groupGuestSearchTimer: null,
+    groupParticipants: [],
+    additionalEmployeeIds: []
   };
 
   function loadBookingScreen() {
@@ -39,6 +43,7 @@
     const notice = document.getElementById('bookingSetupNotice');
     notice.classList.toggle('hidden', !missing.length);
     notice.textContent = missing.length ? 'Cần thêm ' + missing.join(' và ') + ' trong mục Cài đặt trước khi tạo booking.' : '';
+    refreshBookingResourceChoices();
   }
 
   function fillSelect(id, values, idKey, label) {
@@ -85,7 +90,99 @@
     document.getElementById('bookingCustomerSearch').value = customer.FullName + ' · ' + customer.Phone;
     document.getElementById('bookingCustomerSelected').textContent = 'Đã chọn: ' + customer.FullName + ' · ' + customer.Phone + ' · ' + customer.CustomerID;
     document.getElementById('bookingCustomerResults').classList.add('hidden');
+    bookingUi.groupParticipants = bookingUi.groupParticipants.filter(function (participant) { return participant.CustomerID !== customer.CustomerID; });
+    renderGroupAssignments();
     loadBookingPrepaid();
+  }
+
+  function toggleBookingGroup() {
+    const enabled = document.getElementById('bookingGroupEnabled').checked;
+    document.getElementById('bookingGroupGuestField').classList.toggle('hidden', !enabled);
+    document.getElementById('bookingGroupAssignments').classList.toggle('hidden', !enabled);
+    if (!enabled) {
+      bookingUi.groupParticipants = [];
+      document.getElementById('bookingGroupGuestSearch').value = '';
+      document.getElementById('bookingGroupGuestResults').classList.add('hidden');
+    }
+    renderGroupAssignments();
+    refreshBookingResourceChoices();
+  }
+
+  function searchBookingGroupGuests() {
+    const input = document.getElementById('bookingGroupGuestSearch');
+    const query = input.value.trim();
+    const results = document.getElementById('bookingGroupGuestResults');
+    if (query.length < 2) {
+      results.classList.add('hidden');
+      return;
+    }
+    results.innerHTML = '<div class="customer-picker-empty">Đang tìm khách...</div>';
+    results.classList.remove('hidden');
+    apiCall('searchCustomers', [query, { limit: 15 }], function (customers) {
+      bookingUi.groupGuestResults = (customers || []).filter(function (customer) {
+        return customer.CustomerID !== document.getElementById('bookingCustomer').value &&
+          !bookingUi.groupParticipants.some(function (participant) { return participant.CustomerID === customer.CustomerID; });
+      });
+      results.innerHTML = bookingUi.groupGuestResults.length
+        ? bookingUi.groupGuestResults.map(function (customer, index) {
+          return '<button type="button" class="customer-picker-item" onclick="addBookingGroupGuestByIndex(' + index + ')"><strong>' + app.escape(customer.FullName) + '</strong><small>' + app.escape(customer.Phone) + ' · ' + app.escape(customer.CustomerID) + '</small></button>';
+        }).join('')
+        : '<div class="customer-picker-empty">Không còn khách phù hợp để thêm vào nhóm.</div>';
+    }, handleBookingError);
+  }
+
+  function addBookingGroupGuestByIndex(index) {
+    const customer = bookingUi.groupGuestResults[index];
+    if (!customer) return;
+    if (!document.getElementById('bookingCustomer').value) {
+      app.toast('Hãy chọn khách chính trước khi thêm người đi cùng.', 'error');
+      return;
+    }
+    bookingUi.groupParticipants.push({
+      CustomerID: customer.CustomerID,
+      FullName: customer.FullName,
+      Phone: customer.Phone,
+      EmployeeID: '',
+      BedID: ''
+    });
+    document.getElementById('bookingGroupGuestSearch').value = '';
+    document.getElementById('bookingGroupGuestResults').classList.add('hidden');
+    bookingUi.groupGuestResults = [];
+    renderGroupAssignments();
+    refreshBookingResourceChoices();
+  }
+
+  function removeBookingGroupGuest(index) {
+    bookingUi.groupParticipants.splice(index, 1);
+    renderGroupAssignments();
+    refreshBookingResourceChoices();
+  }
+
+  function updateBookingGroupGuest(index, field, value) {
+    const participant = bookingUi.groupParticipants[index];
+    if (!participant) return;
+    participant[field] = value;
+    if (field === 'EmployeeID') {
+      bookingUi.additionalEmployeeIds = bookingUi.additionalEmployeeIds.filter(function (employeeId) { return employeeId !== value; });
+    }
+    renderGroupAssignments();
+    refreshBookingResourceChoices();
+  }
+
+  function toggleBookingMultipleStaff() {
+    const enabled = document.getElementById('bookingMultipleStaff').checked;
+    document.getElementById('bookingAdditionalStaffField').classList.toggle('hidden', !enabled);
+    if (!enabled) bookingUi.additionalEmployeeIds = [];
+    renderAdditionalEmployeeOptions();
+    refreshBookingResourceChoices();
+  }
+
+  function toggleAdditionalBookingEmployee(employeeId, checked) {
+    const id = String(employeeId || '');
+    bookingUi.additionalEmployeeIds = checked
+      ? bookingUi.additionalEmployeeIds.concat([id]).filter(function (item, index, all) { return all.indexOf(item) === index; })
+      : bookingUi.additionalEmployeeIds.filter(function (item) { return item !== id; });
+    refreshBookingResourceChoices();
   }
 
   function toggleBookingFamilyCard() {
@@ -271,13 +368,105 @@
     return data.slots.find(function (slot) { return slot.StartTime === start && slot.EndTime === end; }) || null;
   }
 
-  function applySelectedAvailability() {
+  function bookingResourcePool() {
     const slot = matchingAvailabilitySlot();
-    if (!slot) return;
-    fillSelect('bookingEmployee', slot.availableEmployees, 'EmployeeID', function (item) { return item.FullName + (item.Role ? ' · ' + item.Role : ''); });
-    const bed = document.getElementById('bookingBed'); const current = bed.value;
-    bed.innerHTML = '<option value="">Chọn giường</option>' + slot.availableBeds.map(function (item) { return '<option value="' + app.escape(item) + '">Giường ' + app.escape(item) + '</option>'; }).join('');
-    bed.value = current;
+    return {
+      employees: slot ? slot.availableEmployees : (bookingUi.options.employees || []),
+      beds: slot ? slot.availableBeds : (bookingUi.options.beds || [])
+    };
+  }
+
+  function groupEmployeeIds(excludedIndex) {
+    return bookingUi.groupParticipants.reduce(function (ids, participant, index) {
+      if (index !== excludedIndex && participant.EmployeeID) ids.push(String(participant.EmployeeID));
+      return ids;
+    }, []);
+  }
+
+  function groupBedIds(excludedIndex) {
+    return bookingUi.groupParticipants.reduce(function (ids, participant, index) {
+      if (index !== excludedIndex && participant.BedID) ids.push(String(participant.BedID));
+      return ids;
+    }, []);
+  }
+
+  function refreshBookingResourceChoices() {
+    const pool = bookingResourcePool();
+    const employee = document.getElementById('bookingEmployee');
+    const bed = document.getElementById('bookingBed');
+    if (!employee || !bed) return;
+    const currentEmployee = employee.value;
+    const currentBed = bed.value;
+    const blockedEmployees = groupEmployeeIds().concat(bookingUi.additionalEmployeeIds || []);
+    const primaryEmployees = pool.employees.filter(function (item) {
+      return item.EmployeeID === currentEmployee || blockedEmployees.indexOf(String(item.EmployeeID)) === -1;
+    });
+    fillSelect('bookingEmployee', primaryEmployees, 'EmployeeID', function (item) {
+      return item.FullName + (item.Role ? ' · ' + item.Role : '');
+    });
+    employee.value = currentEmployee;
+    const blockedBeds = groupBedIds();
+    const primaryBeds = pool.beds.filter(function (item) {
+      return String(item) === String(currentBed) || blockedBeds.indexOf(String(item)) === -1;
+    });
+    bed.innerHTML = '<option value="">Chọn giường</option>' + primaryBeds.map(function (item) {
+      return '<option value="' + app.escape(item) + '">Giường ' + app.escape(item) + '</option>';
+    }).join('');
+    bed.value = currentBed;
+    if (bookingUi.additionalEmployeeIds.indexOf(employee.value) !== -1) {
+      bookingUi.additionalEmployeeIds = bookingUi.additionalEmployeeIds.filter(function (item) { return item !== employee.value; });
+    }
+    renderAdditionalEmployeeOptions();
+    renderGroupAssignments();
+  }
+
+  function renderAdditionalEmployeeOptions() {
+    const container = document.getElementById('bookingAdditionalStaffOptions');
+    const enabled = document.getElementById('bookingMultipleStaff').checked;
+    if (!container) return;
+    if (!enabled) { container.innerHTML = ''; return; }
+    const pool = bookingResourcePool();
+    const primaryEmployeeId = document.getElementById('bookingEmployee').value;
+    const unavailable = groupEmployeeIds().concat(primaryEmployeeId ? [primaryEmployeeId] : []);
+    bookingUi.additionalEmployeeIds = bookingUi.additionalEmployeeIds.filter(function (employeeId) {
+      return unavailable.indexOf(employeeId) === -1 && pool.employees.some(function (item) { return item.EmployeeID === employeeId; });
+    });
+    const employees = pool.employees.filter(function (employee) { return unavailable.indexOf(String(employee.EmployeeID)) === -1; });
+    container.innerHTML = employees.length ? employees.map(function (employee) {
+      const id = String(employee.EmployeeID);
+      const checked = bookingUi.additionalEmployeeIds.indexOf(id) !== -1 ? ' checked' : '';
+      return '<label class="staff-choice"><input type="checkbox" value="' + app.escape(id) + '" onchange="toggleAdditionalBookingEmployee(this.value,this.checked)"' + checked + '><span>' + app.escape(employee.FullName) + (employee.Role ? ' · ' + app.escape(employee.Role) : '') + '</span></label>';
+    }).join('') : '<small class="picker-hint">Không còn kỹ thuật viên trống trong khung giờ này.</small>';
+  }
+
+  function renderGroupAssignments() {
+    const container = document.getElementById('bookingGroupAssignments');
+    if (!container || !document.getElementById('bookingGroupEnabled').checked) {
+      if (container) container.innerHTML = '';
+      return;
+    }
+    if (!bookingUi.groupParticipants.length) {
+      container.innerHTML = '<div class="group-assignment-empty">Chưa có người đi cùng. Tìm và thêm khách để tạo lịch nhóm.</div>';
+      return;
+    }
+    const pool = bookingResourcePool();
+    const primaryEmployeeId = document.getElementById('bookingEmployee').value;
+    const primaryBedId = document.getElementById('bookingBed').value;
+    container.innerHTML = '<div class="group-assignment-head"><strong>Phân công người đi cùng</strong><small>Mỗi người cần kỹ thuật viên và giường riêng.</small></div>' + bookingUi.groupParticipants.map(function (participant, index) {
+      const otherEmployeeIds = groupEmployeeIds(index).concat(bookingUi.additionalEmployeeIds || []).concat(primaryEmployeeId ? [primaryEmployeeId] : []);
+      const employees = pool.employees.filter(function (employee) {
+        return employee.EmployeeID === participant.EmployeeID || otherEmployeeIds.indexOf(String(employee.EmployeeID)) === -1;
+      });
+      const otherBedIds = groupBedIds(index).concat(primaryBedId ? [primaryBedId] : []);
+      const beds = pool.beds.filter(function (bed) {
+        return String(bed) === String(participant.BedID) || otherBedIds.indexOf(String(bed)) === -1;
+      });
+      return '<article class="group-assignment-item"><div><strong>' + app.escape(participant.FullName) + '</strong><small>' + app.escape(participant.Phone) + ' · ' + app.escape(participant.CustomerID) + '</small></div><label><span>Kỹ thuật viên</span><select onchange="updateBookingGroupGuest(' + index + ',\'EmployeeID\',this.value)"><option value="">Chọn</option>' + employees.map(function (employee) { return '<option value="' + app.escape(employee.EmployeeID) + '"' + (employee.EmployeeID === participant.EmployeeID ? ' selected' : '') + '>' + app.escape(employee.FullName) + '</option>'; }).join('') + '</select></label><label><span>Giường</span><select onchange="updateBookingGroupGuest(' + index + ',\'BedID\',this.value)"><option value="">Chọn</option>' + beds.map(function (bed) { return '<option value="' + app.escape(bed) + '"' + (String(bed) === String(participant.BedID) ? ' selected' : '') + '>Giường ' + app.escape(bed) + '</option>'; }).join('') + '</select></label><button type="button" class="icon-button danger" onclick="removeBookingGroupGuest(' + index + ')">Bỏ</button></article>';
+    }).join('');
+  }
+
+  function applySelectedAvailability() {
+    refreshBookingResourceChoices();
   }
 
   function useAvailabilitySlot(startTime, endTime) {
@@ -296,7 +485,10 @@
       const ownerId = booking.CardOwnerCustomerID || '';
       const familyCard = ownerId && ownerId !== booking.CustomerID
         ? '<small>Dùng thẻ: ' + app.escape(customerMap[ownerId] || ownerId) + '</small>' : '';
-      return '<article class="booking-item"><time>' + app.escape(booking.StartTime) + '<small>' + app.escape(booking.EndTime) + '</small></time><div class="booking-info"><strong>' + app.escape(customerMap[booking.CustomerID] || booking.CustomerID) + '</strong><p>' + app.escape(serviceMap[booking.ServiceID] || booking.ServiceID) + ' · Giường ' + app.escape(booking.BedID) + '</p>' + familyCard + '<span class="status-chip">' + app.escape(booking.Status) + '</span></div><div class="booking-actions">' + action + '</div></article>';
+      const employeeNames = Array.isArray(booking.EmployeeNames) && booking.EmployeeNames.length
+        ? '<small>KTV: ' + app.escape(booking.EmployeeNames.join(', ')) + '</small>' : '';
+      const group = booking.BookingGroupID ? '<small>Nhóm: ' + app.escape(booking.BookingGroupID) + '</small>' : '';
+      return '<article class="booking-item"><time>' + app.escape(booking.StartTime) + '<small>' + app.escape(booking.EndTime) + '</small></time><div class="booking-info"><strong>' + app.escape(customerMap[booking.CustomerID] || booking.CustomerID) + '</strong><p>' + app.escape(serviceMap[booking.ServiceID] || booking.ServiceID) + ' · Giường ' + app.escape(booking.BedID) + '</p>' + employeeNames + group + familyCard + '<span class="status-chip">' + app.escape(booking.Status) + '</span></div><div class="booking-actions">' + action + '</div></article>';
     }).join('') : '<div class="empty-state">Chưa có booking trong ngày đã chọn.</div>';
     renderTechnicianAssessmentBookings(bookings || [], customerMap);
   }
@@ -307,7 +499,8 @@
     const current = select.value;
     const employeeId = String(authUi.user.EmployeeID || '');
     const mine = bookings.filter(function (booking) {
-      return String(booking.EmployeeID || '') === employeeId && booking.Status !== 'Hủy lịch' && booking.Status !== 'Không đến';
+      const assigned = Array.isArray(booking.EmployeeIDs) && booking.EmployeeIDs.length ? booking.EmployeeIDs : [booking.EmployeeID];
+      return assigned.map(String).indexOf(employeeId) !== -1 && booking.Status !== 'Hủy lịch' && booking.Status !== 'Không đến';
     });
     select.innerHTML = '<option value="">Chọn booking</option>' + mine.map(function (booking) {
       const name = customerMap[booking.CustomerID] || booking.CustomerID;
@@ -414,22 +607,71 @@
     loadBookingPrepaid();
   }
 
+  function resetBookingGroupState() {
+    bookingUi.groupParticipants = [];
+    bookingUi.groupGuestResults = [];
+    bookingUi.additionalEmployeeIds = [];
+    document.getElementById('bookingGroupEnabled').checked = false;
+    document.getElementById('bookingMultipleStaff').checked = false;
+    document.getElementById('bookingGroupGuestSearch').value = '';
+    document.getElementById('bookingGroupGuestResults').classList.add('hidden');
+    document.getElementById('bookingGroupGuestField').classList.add('hidden');
+    document.getElementById('bookingGroupAssignments').classList.add('hidden');
+    document.getElementById('bookingAdditionalStaffField').classList.add('hidden');
+    document.getElementById('bookingAdditionalStaffOptions').innerHTML = '';
+    document.getElementById('bookingGroupAssignments').innerHTML = '';
+  }
+
+  function bookingPayloadFromForm(form) {
+    const data = Object.fromEntries(new FormData(form).entries());
+    data.EmployeeIDs = [data.EmployeeID].concat(bookingUi.additionalEmployeeIds || []).filter(function (item, index, all) {
+      return item && all.indexOf(item) === index;
+    });
+    if (document.getElementById('bookingGroupEnabled').checked && bookingUi.groupParticipants.length) {
+      const missing = bookingUi.groupParticipants.some(function (participant) {
+        return !participant.EmployeeID || !participant.BedID;
+      });
+      if (missing) throw new Error('Hãy chọn kỹ thuật viên và giường cho từng người đi cùng.');
+      data.Participants = bookingUi.groupParticipants.map(function (participant) {
+        return {
+          CustomerID: participant.CustomerID,
+          EmployeeID: participant.EmployeeID,
+          EmployeeIDs: [participant.EmployeeID],
+          BedID: participant.BedID
+        };
+      });
+    }
+    return data;
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     const today = dateUi.today();
     document.getElementById('bookingDate').value = today;
     document.getElementById('bookingFilterDate').value = today;
     document.getElementById('bookingForm').addEventListener('submit', function (event) {
       event.preventDefault();
-      const data = Object.fromEntries(new FormData(event.currentTarget).entries());
+      let data;
+      try {
+        data = bookingPayloadFromForm(event.currentTarget);
+      } catch (error) {
+        handleBookingError(error);
+        return;
+      }
       const button = document.getElementById('saveBookingButton'); button.disabled = true;
-      apiCall('createBooking', [data], function () {
-        app.toast('Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; document.getElementById('bookingCustomerSearch').value = ''; document.getElementById('bookingCustomer').value = ''; document.getElementById('bookingCustomerSelected').textContent = 'Chưa chọn khách hàng.'; resetBookingCardOwner(); document.getElementById('bookingPrepaidNotice').classList.add('hidden'); bookingRecalculate(); loadBookings(); loadBookingAvailability(); app.loadDashboard(); button.disabled = false;
+      const isGroup = Array.isArray(data.Participants) && data.Participants.length;
+      apiCall(isGroup ? 'createBookingGroup' : 'createBooking', [data], function (result) {
+        const count = result && Array.isArray(result.bookings) ? result.bookings.length : (isGroup ? data.Participants.length + 1 : 1);
+        app.toast(isGroup ? 'Đã tạo ' + count + ' booking cho nhóm.' : 'Đã tạo booking.'); event.currentTarget.reset(); document.getElementById('bookingDate').value = today; document.getElementById('bookingCustomerSearch').value = ''; document.getElementById('bookingCustomer').value = ''; document.getElementById('bookingCustomerSelected').textContent = 'Chưa chọn khách hàng.'; resetBookingCardOwner(); resetBookingGroupState(); document.getElementById('bookingPrepaidNotice').classList.add('hidden'); bookingRecalculate(); loadBookingOptionsForDate(function () { loadBookings(); loadBookingAvailability(); }); app.loadDashboard(); button.disabled = false;
       }, function (error) { button.disabled = false; handleBookingError(error); });
     });
     document.getElementById('bookingService').addEventListener('change', bookingUseService);
     document.getElementById('bookingCustomerSearch').addEventListener('input', function () { window.clearTimeout(bookingUi.customerSearchTimer); bookingUi.customerSearchTimer = window.setTimeout(searchBookingCustomers, 250); });
     document.getElementById('bookingCustomerSearch').addEventListener('focus', function () { if (this.value.trim().length >= 2 && !document.getElementById('bookingCustomer').value) searchBookingCustomers(); });
+    document.getElementById('bookingGroupEnabled').addEventListener('change', toggleBookingGroup);
+    document.getElementById('bookingGroupGuestSearch').addEventListener('input', function () { window.clearTimeout(bookingUi.groupGuestSearchTimer); bookingUi.groupGuestSearchTimer = window.setTimeout(searchBookingGroupGuests, 250); });
+    document.getElementById('bookingGroupGuestSearch').addEventListener('focus', function () { if (this.value.trim().length >= 2) searchBookingGroupGuests(); });
     document.getElementById('bookingUseFamilyCard').addEventListener('change', toggleBookingFamilyCard);
+    document.getElementById('bookingMultipleStaff').addEventListener('change', toggleBookingMultipleStaff);
     document.getElementById('bookingCardOwnerSearch').addEventListener('input', function () { window.clearTimeout(bookingUi.cardOwnerSearchTimer); bookingUi.cardOwnerSearchTimer = window.setTimeout(searchBookingCardOwners, 250); });
     document.getElementById('bookingCardOwnerSearch').addEventListener('focus', function () { if (this.value.trim().length >= 2 && !document.getElementById('bookingCardOwner').value) searchBookingCardOwners(); });
     document.getElementById('bookingPrice').addEventListener('input', function () { bookingRecalculate(); loadBookingPrepaid(); });
@@ -441,6 +683,8 @@
     });
     document.getElementById('bookingStart').addEventListener('change', loadBookingAvailability);
     document.getElementById('bookingEnd').addEventListener('change', loadBookingAvailability);
+    document.getElementById('bookingEmployee').addEventListener('change', refreshBookingResourceChoices);
+    document.getElementById('bookingBed').addEventListener('change', refreshBookingResourceChoices);
     const technicianBooking = document.getElementById('technicianAssessmentBooking');
     if (technicianBooking) technicianBooking.addEventListener('change', function () {
       document.getElementById('uploadTechnicianAssessmentButton').disabled = !this.value;

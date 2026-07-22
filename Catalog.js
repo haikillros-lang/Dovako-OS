@@ -78,6 +78,11 @@ class CatalogService {
         set[String(booking.EmployeeID || '').trim()] = true;
         return set;
       }, {});
+    const employeeIdsInAssignments = Database.findAll(CONFIG.SHEETS.BOOKING_ASSIGNMENTS)
+      .reduce(function (set, assignment) {
+        set[String(assignment.EmployeeID || '').trim()] = true;
+        return set;
+      }, {});
     const employeeIdsInUsers = Database.findAll(CONFIG.SHEETS.USERS)
       .reduce(function (set, user) {
         set[String(user.EmployeeID || '').trim()] = true;
@@ -86,11 +91,11 @@ class CatalogService {
 
     const removable = employees.filter(function (employee) {
       const employeeId = String(employee.EmployeeID || '').trim();
-      return !employeeIdsInBookings[employeeId] && !employeeIdsInUsers[employeeId];
+      return !employeeIdsInBookings[employeeId] && !employeeIdsInAssignments[employeeId] && !employeeIdsInUsers[employeeId];
     });
     const retained = employees.filter(function (employee) {
       const employeeId = String(employee.EmployeeID || '').trim();
-      return employeeIdsInBookings[employeeId] || employeeIdsInUsers[employeeId];
+      return employeeIdsInBookings[employeeId] || employeeIdsInAssignments[employeeId] || employeeIdsInUsers[employeeId];
     });
     const deletedCount = Database.removeRecords(CONFIG.SHEETS.EMPLOYEES, removable);
 
