@@ -8,14 +8,14 @@ class CustomerService {
 
   static get HEADERS() {
     return [
-      'CustomerID', 'FullName', 'Phone', 'Birthday', 'Gender', 'Occupation',
+      'CustomerID', 'FullName', 'Phone', 'Email', 'Birthday', 'Gender', 'Occupation',
       'Address', 'Source', 'Note', 'CreatedDate', 'UpdatedDate', 'Status'
     ];
   }
 
-  /** Creates CUSTOMERS only when absent; never overwrites existing data. */
+  /** Adds new customer columns without ever overwriting existing records. */
   static initialize() {
-    Database.ensureTable(this.TABLE, this.HEADERS);
+    Database.ensureColumns(this.TABLE, this.HEADERS);
     return { sheet: this.TABLE, headers: this.HEADERS.slice() };
   }
 
@@ -32,7 +32,7 @@ class CustomerService {
     });
     if (query) {
       customers = customers.filter(function (customer) {
-        return [customer.CustomerID, customer.FullName, customer.Phone].some(function (value) {
+        return [customer.CustomerID, customer.FullName, customer.Phone, customer.Email].some(function (value) {
           return CustomerService.normalizeSearch(value).indexOf(query) !== -1;
         });
       });
@@ -296,6 +296,7 @@ class CustomerService {
       const safe = Object.assign({}, customer);
       // Do not send phone numbers to the browser of a technician at all.
       safe.Phone = '';
+      safe.Email = '';
       return safe;
     };
     return Array.isArray(data) ? data.map(redact) : redact(data);
@@ -372,6 +373,7 @@ class CustomerService {
     return {
       FullName: Validator.text(data.FullName, 'Họ và tên', { required: true, maxLength: 120 }),
       Phone: Validator.phone(data.Phone, 'Số điện thoại'),
+      Email: Validator.email(data.Email, 'Email'),
       Birthday: Validator.date(data.Birthday, 'Ngày sinh'),
       Gender: this.validateGender(data.Gender),
       Occupation: Validator.text(data.Occupation, 'Nghề nghiệp', { maxLength: 120 }),
@@ -382,7 +384,7 @@ class CustomerService {
   }
 
   static pickEditableFields(input) {
-    const allowed = ['FullName', 'Phone', 'Birthday', 'Gender', 'Occupation', 'Address', 'Source', 'Note', 'Status'];
+    const allowed = ['FullName', 'Phone', 'Email', 'Birthday', 'Gender', 'Occupation', 'Address', 'Source', 'Note', 'Status'];
     return allowed.reduce(function (result, key) {
       if (Object.prototype.hasOwnProperty.call(input, key)) result[key] = input[key];
       return result;

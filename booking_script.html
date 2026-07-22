@@ -12,7 +12,8 @@
     groupGuestResults: [],
     groupGuestSearchTimer: null,
     groupParticipants: [],
-    additionalEmployeeIds: []
+    additionalEmployeeIds: [],
+    prepaidReceipt: null
   };
 
   function loadBookingScreen() {
@@ -548,7 +549,88 @@
     if (booking.Status === 'Chưa xác nhận') return '<button class="icon-button" onclick="bookingStatus(\'' + id + '\',\'confirm\')">Xác nhận</button><button class="icon-button danger" onclick="bookingStatus(\'' + id + '\',\'cancel\')">Hủy</button>';
     if (booking.Status === 'Đã xác nhận') return '<button class="icon-button" onclick="bookingStatus(\'' + id + '\',\'checkin\')">Check-in</button><button class="icon-button danger" onclick="bookingStatus(\'' + id + '\',\'cancel\')">Hủy</button>';
     if (booking.Status === 'Đang phục vụ') return '<button class="icon-button" onclick="bookingStatus(\'' + id + '\',\'complete\')">Hoàn thành</button>';
+    if (booking.Status === 'Hoàn thành') return '<button class="icon-button" onclick="showPrepaidReceiptForBooking(\'' + id + '\')">Phiếu thẻ</button>';
     return '';
+  }
+
+  function showPrepaidReceipt(receipt, emailResult) {
+    bookingUi.prepaidReceipt = receipt || null;
+    const panel = document.getElementById('prepaidReceiptPanel');
+    const text = document.getElementById('prepaidReceiptText');
+    const caption = document.getElementById('prepaidReceiptCaption');
+    const emailButton = document.getElementById('resendPrepaidReceiptButton');
+    if (!receipt) {
+      panel.classList.add('hidden');
+      text.textContent = '';
+      return;
+    }
+
+    panel.classList.remove('hidden');
+    text.textContent = receipt.Text || '';
+    if (emailResult && emailResult.sent) {
+      caption.textContent = 'Đã tự gửi email đến ' + (emailResult.recipient || receipt.CustomerEmail || 'khách hàng') + '.';
+    } else if (receipt.CustomerEmail) {
+      caption.textContent = 'Email nhận phiếu: ' + receipt.CustomerEmail + '. Có thể gửi lại khi cần.';
+    } else {
+      caption.textContent = 'Khách chưa có email. Bạn vẫn có thể sao chép phiếu để gửi Zalo thủ công.';
+    }
+    emailButton.disabled = !receipt.CustomerEmail;
+  }
+
+  function showPrepaidReceiptForBooking(bookingId) {
+    apiCall('getPrepaidReceipt', [bookingId], function (receipt) {
+      showPrepaidReceipt(receipt, null);
+      const panel = document.getElementById('prepaidReceiptPanel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, handleBookingError);
+  }
+
+  function copyPrepaidReceipt() {
+    const receipt = bookingUi.prepaidReceipt;
+    if (!receipt || !receipt.Text) { app.toast('Chưa có phiếu thẻ để sao chép.', 'error'); return; }
+    const copied = function () { app.toast('Đã sao chép phiếu. Bạn có thể dán vào Zalo để gửi khách.'); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(receipt.Text).then(copied).catch(function () { fallbackCopyReceipt(receipt.Text, copied); });
+    } else {
+      fallbackCopyReceipt(receipt.Text, copied);
+    }
+  }
+
+  function fallbackCopyReceipt(value, done) {
+    const area = document.createElement('textarea');
+    area.value = value;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    try {
+      document.execCommand('copy');
+      done();
+    } catch (error) {
+      app.toast('Không thể sao chép tự động. Hãy chọn và sao chép nội dung phiếu.', 'error');
+    }
+    document.body.removeChild(area);
+  }
+
+  function resendPrepaidReceiptEmail() {
+    const receipt = bookingUi.prepaidReceipt;
+    if (!receipt || !receipt.BookingID) { app.toast('Chưa có phiếu thẻ để gửi email.', 'error'); return; }
+    const button = document.getElementById('resendPrepaidReceiptButton');
+    button.disabled = true;
+    button.textContent = 'Đang gửi...';
+    apiCall('resendPrepaidReceiptEmail', [receipt.BookingID], function (result) {
+      const email = result && result.email;
+      showPrepaidReceipt(result && result.receipt, email);
+      if (email && email.sent) app.toast('Đã gửi lại phiếu qua email.');
+      else app.toast('Không gửi được email: khách chưa có email hoặc hệ thống chưa được cấp quyền gửi.', 'error');
+      button.disabled = !(result && result.receipt && result.receipt.CustomerEmail);
+      button.textContent = 'Gửi lại email';
+    }, function (error) {
+      button.disabled = !(receipt && receipt.CustomerEmail);
+      button.textContent = 'Gửi lại email';
+      handleBookingError(error);
+    });
   }
 
   function bookingStatus(id, action) {
@@ -557,11 +639,19 @@
     if (action === 'cancel' && note === null) return;
     apiCall(call, action === 'cancel' ? [id, note] : [id], function (result) {
       const prepaid = result && result.Prepaid;
+      const receipt = result && result.PrepaidReceipt;
+      const receiptEmail = result && result.PrepaidReceiptEmail;
       const message = action === 'complete' && prepaid && prepaid.used
         ? 'Đã hoàn thành và trừ thẻ ' + prepaid.cardId + (prepaid.cardMode === 'Value'
           ? '. Còn ' + app.currency(prepaid.remainingValue) + '.'
           : (prepaid.remainingSessions === null ? '' : '. Còn ' + prepaid.remainingSessions + ' buổi.'))
         : 'Đã cập nhật trạng thái booking.';
+      if (action === 'complete' && receipt) {
+        showPrepaidReceipt(receipt, receiptEmail);
+        if (receiptEmail && receiptEmail.sent) message += ' Phiếu đã gửi email.';
+        else if (!receipt.CustomerEmail) message += ' Khách chưa có email; hãy sao chép phiếu để gửi Zalo.';
+        else if (receiptEmail && receiptEmail.reason === 'SEND_FAILED') message += ' Chưa gửi được email; bạn có thể gửi lại.';
+      }
       app.toast(message);
       loadBookings(); loadBookingAvailability(); app.loadDashboard();
     }, handleBookingError);

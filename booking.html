@@ -39,6 +39,14 @@
   <section class="panel booking-list-panel">
     <div class="panel-head compact"><div><h2>Lịch trong ngày</h2><p id="bookingCount">Đang tải...</p></div><input id="bookingFilterDate" class="date-filter" type="text" inputmode="numeric" maxlength="10" pattern="[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}" placeholder="dd/mm/yyyy" data-date-format="vi"></div>
     <div id="bookingList" class="booking-list"><div class="empty-state">Đang tải...</div></div>
+    <section id="prepaidReceiptPanel" class="prepaid-receipt-panel hidden" data-roles="Admin,Manager,Reception" aria-live="polite">
+      <div class="panel-head compact"><div><h2>Phiếu trừ thẻ</h2><p id="prepaidReceiptCaption">Hoàn thành booking dùng thẻ để tạo phiếu.</p></div></div>
+      <pre id="prepaidReceiptText" class="prepaid-receipt-text"></pre>
+      <div class="receipt-actions">
+        <button id="copyPrepaidReceiptButton" class="button secondary" type="button" onclick="copyPrepaidReceipt()">Sao chép phiếu</button>
+        <button id="resendPrepaidReceiptButton" class="button primary" type="button" onclick="resendPrepaidReceiptEmail()">Gửi lại email</button>
+      </div>
+    </section>
     <div class="availability-section">
       <div class="panel-head compact"><div><h2>Khung giờ còn trống</h2><p id="availabilityCaption">Đang tính lịch trống...</p></div></div>
       <div id="bookingAvailability" class="availability-list"><div class="empty-state">Đang tải...</div></div>

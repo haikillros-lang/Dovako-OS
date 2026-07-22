@@ -34,6 +34,22 @@ class Validator {
     return phone;
   }
 
+  /** Validates an optional email address used for customer receipts. */
+  static email(value, label, options) {
+    const settings = options || {};
+    const name = label || 'Email';
+    if (value === null || value === undefined || String(value).trim() === '') {
+      if (settings.required) throw new Error(name + ' là bắt buộc.');
+      return '';
+    }
+
+    const email = this.cleanText(value).toLowerCase();
+    if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error(name + ' không đúng định dạng.');
+    }
+    return email;
+  }
+
   static number(value, label, options) {
     const settings = options || {};
     const name = label || 'Giá trị';

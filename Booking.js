@@ -257,10 +257,18 @@ class BookingService {
     if (prepaid.used) changes.FinalPrice = Math.max(0, Number(prepaid.outstandingAmount || 0));
 
     const saved = Database.update(this.TABLE, bookingId, changes, 'BookingID');
+    // Receipt delivery is best-effort: an email error must never undo a
+    // completed booking or restore a card balance that was already consumed.
+    const receiptResult = prepaid.used && typeof PrepaidReceiptService !== 'undefined'
+      ? PrepaidReceiptService.sendForBooking(bookingId)
+      : { receipt: null, email: { sent: false, reason: 'NO_PREPAID_USAGE' } };
     this.audit('STATUS_' + this.statusKey(CONFIG.BOOKING_STATUS.COMPLETED), bookingId, Object.assign(
-      this.auditMetadata(saved), { prepaidCardId: prepaid.cardId || '', prepaidUsed: Boolean(prepaid.used) }
+      this.auditMetadata(saved), {
+        prepaidCardId: prepaid.cardId || '', prepaidUsed: Boolean(prepaid.used),
+        prepaidReceiptEmailSent: Boolean(receiptResult.email && receiptResult.email.sent)
+      }
     ));
-    return Object.assign({}, saved, { Prepaid: prepaid });
+    return Object.assign({}, saved, { Prepaid: prepaid, PrepaidReceipt: receiptResult.receipt, PrepaidReceiptEmail: receiptResult.email });
   }
 
   static cancel(bookingId, note) {
