@@ -1,29 +1,61 @@
 <script>
+  const reportExportState = { request: null, report: null, type: '' };
+
   function reportDateValue(date) { return dateUi.display(date); }
+
   function reportRows(rows, emptyText) {
     if (!rows || !rows.length) return '<tr><td colspan="3" class="table-empty">' + app.escape(emptyText) + '</td></tr>';
-    return rows.map(function (row) { return '<tr><td><strong>' + app.escape(row.name) + '</strong></td><td>' + app.escape(row.bookings) + '</td><td>' + app.currency(row.revenue) + '</td></tr>'; }).join('');
+    return rows.map(function (row) {
+      return '<tr><td><strong>' + app.escape(row.name) + '</strong></td><td>' + app.escape(row.bookings) + '</td><td>' + app.currency(row.revenue) + '</td></tr>';
+    }).join('');
   }
+
+  function setReportExportEnabled(enabled) {
+    ['printReportButton', 'downloadReportButton', 'sendReportButton'].forEach(function (id) {
+      const button = document.getElementById(id);
+      if (button) button.disabled = !enabled;
+    });
+  }
+
+  function beginReportLoad(request, loadingText, successHandler) {
+    reportExportState.request = request;
+    reportExportState.report = null;
+    reportExportState.type = request.Type;
+    setReportExportEnabled(false);
+    document.getElementById('reportSummary').innerHTML = '<div class="loading-card">' + app.escape(loadingText) + '</div>';
+    apiCall(request.Type === 'Month' ? 'getMonthlyRevenue' : request.Type === 'Year' ? 'getYearlyRevenue' : 'getReport',
+      request.Type === 'Month' ? [request.Month] : request.Type === 'Year' ? [request.Year] : [{ From: request.From, To: request.To }],
+      successHandler,
+      function (error) {
+        app.toast(error && error.message ? error.message : 'Không thể tải báo cáo.', 'error');
+        document.getElementById('reportSummary').innerHTML = '<div class="empty-state">Không tải được báo cáo.</div>';
+      });
+  }
+
   function loadReports() {
     const from = document.getElementById('reportFrom');
     const to = document.getElementById('reportTo');
-    if (!from.value || !to.value) { const now = new Date(); from.value = reportDateValue(new Date(now.getFullYear(), now.getMonth(), 1)); to.value = reportDateValue(now); }
-    document.getElementById('reportSummary').innerHTML = '<div class="loading-card">Đang tải báo cáo...</div>';
-    apiCall('getReport', [{ From: from.value, To: to.value }], renderReport, function (error) { app.toast(error && error.message ? error.message : 'Không thể tải báo cáo.', 'error'); });
+    if (!from.value || !to.value) {
+      const now = new Date();
+      from.value = reportDateValue(new Date(now.getFullYear(), now.getMonth(), 1));
+      to.value = reportDateValue(now);
+    }
+    beginReportLoad({ Type: 'Range', From: from.value, To: to.value }, 'Đang tải báo cáo...', renderReport);
   }
+
   function loadMonthlyRevenue() {
     const value = document.getElementById('reportMonth').value;
     if (!value) { app.toast('Chọn tháng cần xem.', 'error'); return; }
-    document.getElementById('reportSummary').innerHTML = '<div class="loading-card">Đang tải doanh thu tháng...</div>';
-    apiCall('getMonthlyRevenue', [value], renderReport, function (error) { app.toast(error && error.message ? error.message : 'Không thể tải doanh thu tháng.', 'error'); });
+    beginReportLoad({ Type: 'Month', Month: value }, 'Đang tải doanh thu tháng...', renderReport);
   }
+
   function loadYearlyRevenue() {
     const year = document.getElementById('reportYear').value;
     if (!year) { app.toast('Chọn năm cần xem.', 'error'); return; }
-    document.getElementById('reportSummary').innerHTML = '<div class="loading-card">Đang tải doanh thu năm...</div>';
-    apiCall('getYearlyRevenue', [year], renderYearlyRevenue, function (error) { app.toast(error && error.message ? error.message : 'Không thể tải doanh thu năm.', 'error'); });
+    beginReportLoad({ Type: 'Year', Year: year }, 'Đang tải doanh thu năm...', renderYearlyRevenue);
   }
-  function renderReport(report) {
+
+  function renderSummary(report) {
     const summary = report.summary || {};
     const cards = [
       ['Doanh thu', app.currency(summary.revenue), dateUi.display(report.from) + ' – ' + dateUi.display(report.to)],
@@ -31,12 +63,27 @@
       ['Booking hoàn thành', summary.completedBookings || 0, 'Trên ' + (summary.totalBookings || 0) + ' booking'],
       ['Hủy / không đến', summary.cancelledBookings || 0, 'Trong khoảng đã chọn']
     ];
-    document.getElementById('reportSummary').innerHTML = cards.map(function (card) { return '<article class="metric-card"><p>' + app.escape(card[0]) + '</p><strong>' + app.escape(card[1]) + '</strong><span>' + app.escape(card[2]) + '</span></article>'; }).join('');
+    document.getElementById('reportSummary').innerHTML = cards.map(function (card) {
+      return '<article class="metric-card"><p>' + app.escape(card[0]) + '</p><strong>' + app.escape(card[1]) + '</strong><span>' + app.escape(card[2]) + '</span></article>';
+    }).join('');
+  }
+
+  function storeReportForExport(report) {
+    reportExportState.report = report;
+    setReportExportEnabled(true);
+  }
+
+  function renderReport(report) {
+    storeReportForExport(report);
+    renderSummary(report);
+    document.getElementById('annualRevenueRows').innerHTML = '<tr><td colspan="5" class="table-empty">Chọn “Xem năm” để xem bảng doanh thu theo tháng.</td></tr>';
     document.getElementById('reportServices').innerHTML = reportRows(report.byService, 'Chưa có booking hoàn thành.');
     document.getElementById('reportEmployees').innerHTML = reportRows(report.byEmployee, 'Chưa có booking hoàn thành.');
   }
+
   function renderYearlyRevenue(report) {
-    renderReport(Object.assign({}, report, { byService: [], byEmployee: [] }));
+    storeReportForExport(report);
+    renderSummary(report);
     const rows = report.months || [];
     document.getElementById('annualRevenueRows').innerHTML = rows.map(function (row) {
       return '<tr><td><strong>' + app.escape(row.label) + '</strong></td><td>' + app.escape(row.completedBookings || 0) + '</td><td>' + app.currency(row.bookingRevenue || 0) + '</td><td>' + app.currency(row.prepaidRevenue || 0) + '</td><td><strong>' + app.currency(row.revenue || 0) + '</strong></td></tr>';
@@ -44,5 +91,129 @@
     document.getElementById('reportServices').innerHTML = reportRows([], 'Báo cáo năm đang hiển thị ở bảng doanh thu theo tháng.');
     document.getElementById('reportEmployees').innerHTML = reportRows([], 'Báo cáo năm đang hiển thị ở bảng doanh thu theo tháng.');
   }
-  document.addEventListener('DOMContentLoaded', function () { const now = new Date(); document.getElementById('reportFrom').value = reportDateValue(new Date(now.getFullYear(), now.getMonth(), 1)); document.getElementById('reportTo').value = reportDateValue(now); document.getElementById('reportMonth').value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0'); document.getElementById('reportYear').value = now.getFullYear(); });
+
+  function reportPeriodText(report) {
+    return reportExportState.type === 'Year' ? 'Năm ' + report.year : dateUi.display(report.from) + ' – ' + dateUi.display(report.to);
+  }
+
+  function reportCsvCell(value) {
+    return '"' + String(value === null || value === undefined ? '' : value).replace(/"/g, '""') + '"';
+  }
+
+  function reportCsvRows(report) {
+    const summary = report.summary || {};
+    const rows = [
+      ['DOVAKO STRETCHING'],
+      ['BÁO CÁO DOANH THU'],
+      ['Thời gian', reportPeriodText(report)],
+      [],
+      ['Chỉ tiêu', 'Giá trị'],
+      ['Tổng doanh thu', summary.revenue || 0],
+      ['Doanh thu booking', summary.bookingRevenue || 0],
+      ['Doanh thu bán thẻ', summary.prepaidRevenue || 0],
+      ['Số thẻ đã bán', summary.prepaidCards || 0],
+      ['Booking hoàn thành', summary.completedBookings || 0],
+      ['Tổng booking', summary.totalBookings || 0],
+      ['Hủy / không đến', summary.cancelledBookings || 0],
+      []
+    ];
+    if (reportExportState.type === 'Year') {
+      rows.push(['DOANH THU THEO THÁNG']);
+      rows.push(['Tháng', 'Booking hoàn thành', 'Doanh thu booking', 'Tiền bán thẻ', 'Tổng doanh thu']);
+      (report.months || []).forEach(function (row) {
+        rows.push([row.label, row.completedBookings || 0, row.bookingRevenue || 0, row.prepaidRevenue || 0, row.revenue || 0]);
+      });
+      return rows;
+    }
+    rows.push(['DOANH THU THEO DỊCH VỤ']);
+    rows.push(['Dịch vụ', 'Số ca', 'Doanh thu']);
+    (report.byService || []).forEach(function (row) { rows.push([row.name, row.bookings || 0, row.revenue || 0]); });
+    rows.push([]);
+    rows.push(['DOANH THU THEO NHÂN VIÊN']);
+    rows.push(['Nhân viên', 'Số ca', 'Doanh thu']);
+    (report.byEmployee || []).forEach(function (row) { rows.push([row.name, row.bookings || 0, row.revenue || 0]); });
+    return rows;
+  }
+
+  function reportFileName(report) {
+    const suffix = reportExportState.type === 'Year' ? report.year : String(report.from).replace(/-/g, '') + '-den-' + String(report.to).replace(/-/g, '');
+    return 'DOVAKO-bao-cao-doanh-thu-' + suffix + '.csv';
+  }
+
+  function downloadCurrentReport() {
+    const report = reportExportState.report;
+    if (!report) { app.toast('Hãy xem báo cáo trước khi tải file.', 'error'); return; }
+    const csv = '\uFEFF' + reportCsvRows(report).map(function (row) { return row.map(reportCsvCell).join(';'); }).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = reportFileName(report);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
+  function reportPrintTable(headers, rows) {
+    const head = '<thead><tr>' + headers.map(function (item) { return '<th>' + app.escape(item) + '</th>'; }).join('') + '</tr></thead>';
+    const body = rows.length ? rows.map(function (row) {
+      return '<tr>' + row.map(function (item) { return '<td>' + app.escape(item) + '</td>'; }).join('') + '</tr>';
+    }).join('') : '<tr><td colspan="' + headers.length + '">Chưa có dữ liệu.</td></tr>';
+    return '<table>' + head + '<tbody>' + body + '</tbody></table>';
+  }
+
+  function printCurrentReport() {
+    const report = reportExportState.report;
+    if (!report) { app.toast('Hãy xem báo cáo trước khi in.', 'error'); return; }
+    const summary = report.summary || {};
+    const summaryTable = reportPrintTable(['Chỉ tiêu', 'Giá trị'], [
+      ['Tổng doanh thu', app.currency(summary.revenue)],
+      ['Doanh thu booking', app.currency(summary.bookingRevenue)],
+      ['Doanh thu bán thẻ', app.currency(summary.prepaidRevenue)],
+      ['Số thẻ đã bán', summary.prepaidCards || 0],
+      ['Booking hoàn thành', summary.completedBookings || 0],
+      ['Hủy / không đến', summary.cancelledBookings || 0]
+    ]);
+    const details = reportExportState.type === 'Year'
+      ? '<h3>Doanh thu theo tháng</h3>' + reportPrintTable(['Tháng', 'Booking hoàn thành', 'Doanh thu booking', 'Tiền bán thẻ', 'Tổng doanh thu'], (report.months || []).map(function (row) {
+          return [row.label, row.completedBookings || 0, app.currency(row.bookingRevenue), app.currency(row.prepaidRevenue), app.currency(row.revenue)];
+        }))
+      : '<h3>Doanh thu theo dịch vụ</h3>' + reportPrintTable(['Dịch vụ', 'Số ca', 'Doanh thu'], (report.byService || []).map(function (row) { return [row.name, row.bookings || 0, app.currency(row.revenue)]; })) +
+        '<h3>Doanh thu theo nhân viên</h3>' + reportPrintTable(['Nhân viên', 'Số ca', 'Doanh thu'], (report.byEmployee || []).map(function (row) { return [row.name, row.bookings || 0, app.currency(row.revenue)]; }));
+    const popup = window.open('', '_blank', 'width=950,height=720');
+    if (!popup) { app.toast('Trình duyệt đang chặn cửa sổ in. Hãy cho phép cửa sổ bật lên.', 'error'); return; }
+    popup.document.write('<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Báo cáo doanh thu DOVAKO</title><style>body{font-family:Arial,sans-serif;color:#17223b;margin:32px}h1{margin-bottom:4px}h2{margin-top:28px}p{color:#4a5973}table{border-collapse:collapse;width:100%;margin:10px 0 22px}th,td{border:1px solid #aeb8c9;padding:8px;text-align:left}th{background:#eef3ff}@media print{body{margin:14mm}}</style></head><body><h1>DOVAKO STRETCHING</h1><h2>BÁO CÁO DOANH THU</h2><p><strong>Thời gian:</strong> ' + app.escape(reportPeriodText(report)) + '</p>' + summaryTable + details + '<p>In ngày ' + app.escape(reportDateValue(new Date())) + '</p></body></html>');
+    popup.document.close();
+    popup.focus();
+    window.setTimeout(function () { popup.print(); }, 250);
+  }
+
+  function sendCurrentReportEmail() {
+    const report = reportExportState.report;
+    const input = document.getElementById('reportRecipientEmail');
+    const email = String(input && input.value || '').trim();
+    if (!report) { app.toast('Hãy xem báo cáo trước khi gửi email.', 'error'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { app.toast('Nhập email nhận báo cáo hợp lệ.', 'error'); return; }
+    const button = document.getElementById('sendReportButton');
+    button.disabled = true;
+    button.textContent = 'Đang gửi...';
+    apiCall('sendReportEmail', [Object.assign({}, reportExportState.request, { Email: email })], function (result) {
+      button.textContent = 'Gửi file email';
+      button.disabled = false;
+      app.toast(result && result.message ? result.message : 'Đã gửi báo cáo qua email.');
+    }, function (error) {
+      button.textContent = 'Gửi file email';
+      button.disabled = false;
+      app.toast(error && error.message ? error.message : 'Không gửi được báo cáo qua email.', 'error');
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const now = new Date();
+    document.getElementById('reportFrom').value = reportDateValue(new Date(now.getFullYear(), now.getMonth(), 1));
+    document.getElementById('reportTo').value = reportDateValue(now);
+    document.getElementById('reportMonth').value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    document.getElementById('reportYear').value = now.getFullYear();
+    setReportExportEnabled(false);
+  });
 </script>

@@ -12,6 +12,13 @@
         <button class="button primary" type="button" onclick="loadReports()">Xem báo cáo</button>
       </div>
     </div>
+    <div class="report-export-actions" id="reportExportActions">
+      <span>Xuất theo dữ liệu đang hiển thị:</span>
+      <button id="printReportButton" class="button secondary" type="button" onclick="printCurrentReport()" disabled>In báo cáo</button>
+      <button id="downloadReportButton" class="button secondary" type="button" onclick="downloadCurrentReport()" disabled>Tải file Excel</button>
+      <input id="reportRecipientEmail" type="email" placeholder="Email nhận báo cáo">
+      <button id="sendReportButton" class="button primary" type="button" onclick="sendCurrentReportEmail()" disabled>Gửi file email</button>
+    </div>
   </div>
   <div id="reportSummary" class="metric-grid"></div>
   <section class="panel" id="annualRevenuePanel">
