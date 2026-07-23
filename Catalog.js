@@ -9,7 +9,8 @@ class CatalogService {
   }
 
   static initialize() {
-    Database.ensureTable(CONFIG.SHEETS.EMPLOYEES, this.EMPLOYEE_HEADERS);
+    // EMPLOYEES may be an existing operational sheet.  Add the new
+    // CommissionRate column safely instead of requiring an exact header order.
     Database.ensureColumns(CONFIG.SHEETS.EMPLOYEES, this.EMPLOYEE_HEADERS);
     Database.ensureTable(CONFIG.SHEETS.SERVICES, this.SERVICE_HEADERS);
   }
