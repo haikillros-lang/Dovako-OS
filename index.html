@@ -100,26 +100,117 @@
         todayIso() { return this.iso(new Date()); },
         bind() {
           document.querySelectorAll('input[data-date-format="vi"]').forEach(function (input) {
-            if (!input.closest('.leave-date-control')) {
-              const value = dateUi.iso(input.value);
-              input.type = 'date';
-              input.lang = 'vi';
-              input.removeAttribute('inputmode');
-              input.removeAttribute('maxlength');
-              input.removeAttribute('pattern');
-              input.removeAttribute('placeholder');
-              input.removeAttribute('data-date-format');
-              if (value) input.value = value;
-              return;
-            }
-            const normalize = function () {
-              if (!input.value) return;
-              const formatted = dateUi.display(input.value);
-              if (formatted) input.value = formatted;
-            };
-            input.addEventListener('blur', normalize);
-            normalize();
+            // Lịch nghỉ đã có bộ chọn ngày theo khoảng riêng. Các ô còn lại
+            // dùng lịch chung để Chrome không đổi dd/mm thành mm/dd.
+            if (input.closest('.leave-date-control')) return;
+            const formatted = dateUi.display(input.value);
+            if (formatted) input.value = formatted;
+            input.type = 'text';
+            input.readOnly = true;
+            input.autocomplete = 'off';
+            input.classList.add('vi-date-picker-input');
+            input.setAttribute('aria-haspopup', 'dialog');
+            input.removeAttribute('inputmode');
+            input.removeAttribute('maxlength');
+            input.removeAttribute('pattern');
+            input.removeAttribute('placeholder');
+            input.removeAttribute('data-date-format');
+            input.addEventListener('click', function () { dateUi.open(input); });
+            input.addEventListener('keydown', function (event) {
+              if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
+                event.preventDefault();
+                dateUi.open(input);
+              }
+            });
           });
+          this.ensurePicker();
+        },
+        ensurePicker() {
+          if (document.getElementById('dovakoDatePicker')) return;
+          const picker = document.createElement('div');
+          picker.id = 'dovakoDatePicker';
+          picker.className = 'dovako-date-picker hidden';
+          picker.setAttribute('role', 'dialog');
+          picker.setAttribute('aria-label', 'Chọn ngày');
+          picker.innerHTML =
+            '<div class="dovako-date-picker-head">' +
+              '<button type="button" class="icon-button" data-date-action="previous" aria-label="Tháng trước">‹</button>' +
+              '<strong id="dovakoDatePickerTitle"></strong>' +
+              '<span><button type="button" class="icon-button" data-date-action="today">Hôm nay</button><button type="button" class="icon-button" data-date-action="next" aria-label="Tháng sau">›</button></span>' +
+            '</div>' +
+            '<table class="dovako-date-picker-calendar"><thead><tr><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th>CN</th></tr></thead><tbody id="dovakoDatePickerDays"></tbody></table>' +
+            '<div class="dovako-date-picker-foot"><button type="button" class="text-button" data-date-action="clear">Xóa ngày</button><button type="button" class="text-button" data-date-action="close">Đóng</button></div>';
+          document.body.appendChild(picker);
+          picker.addEventListener('click', function (event) {
+            const action = event.target && event.target.dataset ? event.target.dataset.dateAction : '';
+            if (action === 'previous') dateUi.move(-1);
+            if (action === 'next') dateUi.move(1);
+            if (action === 'today') dateUi.select(dateUi.todayIso());
+            if (action === 'clear') dateUi.clear();
+            if (action === 'close') dateUi.close();
+            const date = event.target && event.target.dataset ? event.target.dataset.date : '';
+            if (date) dateUi.select(date);
+          });
+          document.addEventListener('mousedown', function (event) {
+            const target = event.target;
+            if (!dateUi.pickerTarget || picker.contains(target) || target === dateUi.pickerTarget) return;
+            dateUi.close();
+          });
+          document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape') dateUi.close();
+          });
+        },
+        open(input) {
+          if (!input || input.disabled) return;
+          this.ensurePicker();
+          const selected = this.parse(input.value) || new Date();
+          this.pickerTarget = input;
+          this.pickerMonth = new Date(selected.getFullYear(), selected.getMonth(), 1);
+          document.getElementById('dovakoDatePicker').classList.remove('hidden');
+          this.renderPicker();
+        },
+        close() {
+          const picker = document.getElementById('dovakoDatePicker');
+          if (picker) picker.classList.add('hidden');
+          this.pickerTarget = null;
+        },
+        move(months) {
+          const current = this.pickerMonth || new Date();
+          this.pickerMonth = new Date(current.getFullYear(), current.getMonth() + Number(months || 0), 1);
+          this.renderPicker();
+        },
+        renderPicker() {
+          const month = this.pickerMonth || new Date();
+          const year = month.getFullYear();
+          const monthIndex = month.getMonth();
+          const selected = this.iso(this.pickerTarget && this.pickerTarget.value);
+          const today = this.todayIso();
+          document.getElementById('dovakoDatePickerTitle').textContent = new Intl.DateTimeFormat('vi-VN', { month: 'long', year: 'numeric' }).format(month);
+          const cells = [];
+          const firstDay = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+          const days = new Date(year, monthIndex + 1, 0).getDate();
+          for (let index = 0; index < firstDay; index += 1) cells.push('<td class="outside-month"></td>');
+          for (let day = 1; day <= days; day += 1) {
+            const key = year + '-' + this.pad(monthIndex + 1) + '-' + this.pad(day);
+            const classes = [key === today ? 'today' : '', key === selected ? 'selected' : ''].filter(Boolean).join(' ');
+            cells.push('<td><button type="button" class="' + classes + '" data-date="' + key + '">' + day + '</button></td>');
+          }
+          while (cells.length % 7) cells.push('<td class="outside-month"></td>');
+          let rows = '';
+          for (let index = 0; index < cells.length; index += 7) rows += '<tr>' + cells.slice(index, index + 7).join('') + '</tr>';
+          document.getElementById('dovakoDatePickerDays').innerHTML = rows;
+        },
+        select(value) {
+          if (!this.pickerTarget) return;
+          this.pickerTarget.value = this.display(value);
+          this.pickerTarget.dispatchEvent(new Event('change', { bubbles: true }));
+          this.close();
+        },
+        clear() {
+          if (!this.pickerTarget) return;
+          this.pickerTarget.value = '';
+          this.pickerTarget.dispatchEvent(new Event('change', { bubbles: true }));
+          this.close();
         }
       };
       const app = {

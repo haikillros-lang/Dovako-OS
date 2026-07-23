@@ -24,7 +24,7 @@
   }
 
   function loadBookingOptionsForDate(done) {
-    const date = document.getElementById('bookingDate').value || dateUi.todayIso();
+    const date = document.getElementById('bookingDate').value || dateUi.today();
     apiCall('getBookingOptions', [{ date: date }], function (options) {
       bookingUi.options = options || bookingUi.options;
       renderBookingOptions();
@@ -613,6 +613,44 @@
     document.body.removeChild(area);
   }
 
+  function printPrepaidCheckinSheet() {
+    const receipt = bookingUi.prepaidReceipt;
+    if (!receipt || !receipt.BookingID) { app.toast('Chưa có phiếu thẻ để in check-in.', 'error'); return; }
+    const popup = window.open('', '_blank');
+    if (!popup) { app.toast('Trình duyệt đang chặn cửa sổ in. Hãy cho phép mở cửa sổ mới rồi thử lại.', 'error'); return; }
+    popup.document.write('<title>Đang tạo phiếu check-in...</title><p style="font-family:Arial;padding:24px">Đang tạo phiếu check-in...</p>');
+    apiCall('getPrepaidCheckinSheet', [receipt.BookingID], function (sheet) {
+      popup.document.open();
+      popup.document.write(prepaidCheckinHtml(sheet));
+      popup.document.close();
+      popup.focus();
+    }, function (error) {
+      popup.close();
+      handleBookingError(error);
+    });
+  }
+
+  function prepaidCheckinHtml(sheet) {
+    const history = sheet.History || [];
+    const isSession = sheet.CardMode === 'Session';
+    const balance = isSession ? (Number(sheet.RemainingSessions || 0) + ' buổi') : app.currency(sheet.RemainingValue || 0);
+    const limit = isSession ? (Number(sheet.InitialCredit || 0) + ' buổi') : app.currency(sheet.InitialCredit || 0);
+    const rows = history.length ? history.map(function (item) {
+      const used = isSession ? (Number(item.UsedSessions || 1) + ' buổi') : app.currency(item.UsedValue || 0);
+      const remaining = isSession ? (Number(item.RemainingSessions || 0) + ' buổi') : app.currency(item.RemainingValue || 0);
+      return '<tr><td>' + app.escape(item.Index) + '</td><td>' + app.escape(item.Date) + '</td><td>' + app.escape(item.Checkin || 'X') + '</td><td class="note">' + app.escape(item.Note) + '</td><td>' + app.escape(used) + '</td><td>' + app.escape(remaining) + '</td></tr>';
+    }).join('') : '<tr><td colspan="6" class="empty">Chưa có buổi check-in nào.</td></tr>';
+    const customerContact = [sheet.CustomerAddress ? 'Địa chỉ: ' + sheet.CustomerAddress : '', sheet.CustomerPhone ? 'Số điện thoại: ' + sheet.CustomerPhone : '']
+      .filter(Boolean).map(function (value) { return app.escape(value); }).join('<br>');
+    return '<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Phiếu check-in ' + app.escape(sheet.CardID) + '</title>' +
+      '<style>body{background:#f3f4f7;color:#111;font-family:Arial,sans-serif;margin:0;padding:24px}.sheet{background:#fff;margin:0 auto;max-width:900px;padding:28px}.head{align-items:center;border-bottom:2px solid #111;display:grid;gap:20px;grid-template-columns:140px 1fr;padding-bottom:16px}.brand{align-items:center;background:#172033;color:#fff;display:flex;font-size:21px;font-weight:700;height:92px;justify-content:center;letter-spacing:1px}.title{text-align:center}.title h1{font-size:28px;margin:0}.title p{font-size:13px;margin:6px 0 0}.customer{border:1px solid #111;line-height:1.55;margin:18px 0;padding:14px 16px}.customer strong{font-size:16px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #111;padding:9px;text-align:center;vertical-align:top}th{background:#f0f3f8}td.note{text-align:left}.empty{color:#667085;padding:22px}.foot{font-size:12px;margin-top:18px;text-align:right}@media print{body{background:#fff;padding:0}.sheet{max-width:none;padding:0}@page{size:A4 portrait;margin:12mm}}</style></head><body><main class="sheet">' +
+      '<header class="head"><div class="brand">DOVAKO</div><div class="title"><h1>BẢNG CHECK-IN</h1><p>Phiếu theo dõi sử dụng thẻ trả trước · Mã thẻ: ' + app.escape(sheet.CardID) + '</p></div></header>' +
+      '<section class="customer"><strong>Họ và tên: ' + app.escape(sheet.CustomerName) + '</strong><br>' + customerContact + (customerContact ? '<br>' : '') +
+      'Loại thẻ: ' + app.escape(sheet.PlanName) + '<br>Ưu đãi: ' + app.escape(sheet.DiscountText) + '<br>' + app.escape(sheet.BonusText) + '<br>Hạn mức ban đầu: ' + app.escape(limit) + '<br>Số dư hiện tại: <strong>' + app.escape(balance) + '</strong></section>' +
+      '<table><thead><tr><th>Số buổi</th><th>Ngày tháng</th><th>Check-in</th><th>Ghi chú</th><th>Đã trừ</th><th>Còn lại</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<p class="foot">DOVAKO Stretching · In ngày ' + app.escape(dateUi.today()) + '</p></main></body></html>';
+  }
+
   function resendPrepaidReceiptEmail() {
     const receipt = bookingUi.prepaidReceipt;
     if (!receipt || !receipt.BookingID) { app.toast('Chưa có phiếu thẻ để gửi email.', 'error'); return; }
@@ -775,7 +813,7 @@ function updateBookingGroupPricing() {
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    const today = dateUi.todayIso();
+    const today = dateUi.today();
     document.getElementById('bookingDate').value = today;
     document.getElementById('bookingFilterDate').value = today;
     document.getElementById('bookingForm').addEventListener('submit', function (event) {

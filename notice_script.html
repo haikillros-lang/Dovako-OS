@@ -5,7 +5,7 @@
     return Boolean(authUi.user) && ['Admin', 'Manager'].indexOf(authUi.user.Role) !== -1;
   }
 
-  function noticeDateInput(value) { return dateUi.iso(value); }
+  function noticeDateInput(value) { return dateUi.display(value); }
 
   function noticeDateLabel(value) {
     if (!value) return '';

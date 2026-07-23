@@ -212,7 +212,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
-    const today = dateUi.todayIso();
+    const today = dateUi.today();
     document.getElementById('prepaidPurchasedDate').value = today;
     document.getElementById('prepaidPlan').addEventListener('change', function () { applyPrepaidPlanDefaults(true); });
     document.getElementById('prepaidBonusService').addEventListener('change', prepaidRecalculate);

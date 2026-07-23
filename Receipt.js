@@ -90,6 +90,111 @@ class PrepaidReceiptService {
     }
   }
 
+  /**
+   * Builds a printable check-in ledger for the prepaid card used by a booking.
+   * Each completed use remains visible with the balance immediately after it.
+   */
+  static buildCheckinSheetForBooking(bookingId) {
+    BookingService.initialize();
+    PrepaidService.initialize();
+
+    const receipt = this.buildForBooking(bookingId);
+    if (!receipt) return null;
+    const card = Database.findById(CONFIG.SHEETS.PREPAID_CARDS, receipt.CardID, 'CardID');
+    if (!card) throw new Error('Không tìm thấy thẻ trả trước: ' + receipt.CardID);
+
+    const owner = CustomerService.get(card.CustomerID) || {};
+    const bookings = Database.findAll(CONFIG.SHEETS.BOOKINGS).reduce(function (map, item) {
+      map[item.BookingID] = item;
+      return map;
+    }, {});
+    const customers = CustomerService.list({ includeInactive: true }).reduce(function (map, item) {
+      map[item.CustomerID] = item;
+      return map;
+    }, {});
+    const services = CatalogService.services(true).reduce(function (map, item) {
+      map[item.ServiceID] = item;
+      return map;
+    }, {});
+    const isSession = String(card.CardMode || 'Value') !== 'Value';
+    const uses = Database.findAll(CONFIG.SHEETS.PREPAID_USAGE)
+      .filter(function (item) { return String(item.CardID) === String(card.CardID); })
+      .sort(function (left, right) {
+        const leftBooking = bookings[left.BookingID] || {};
+        const rightBooking = bookings[right.BookingID] || {};
+        const leftTime = new Date(leftBooking.BookingDate || left.CreatedDate || 0).getTime();
+        const rightTime = new Date(rightBooking.BookingDate || right.CreatedDate || 0).getTime();
+        if (leftTime !== rightTime) return leftTime - rightTime;
+        return String(left.CreatedDate || '').localeCompare(String(right.CreatedDate || ''));
+      });
+
+    let remainingValue = Math.max(0, Number(card.FaceValue || 0) + Number(card.BonusValue || 0));
+    let remainingSessions = Math.max(0, Number(card.TotalSessions || 0));
+    if (isSession && !remainingSessions) {
+      remainingSessions = Math.max(0, Number(card.PaidSessions || 0) + Number(card.BonusSessions || 0));
+    }
+
+    const history = uses.map(function (usage, index) {
+      const booking = bookings[usage.BookingID] || {};
+      const customer = customers[booking.CustomerID || usage.CustomerID] || {};
+      const service = services[booking.ServiceID || usage.ServiceID] || {};
+      const bookingPrice = Math.max(0, Number(booking.Price || 0));
+      const discount = Math.max(0, Number(booking.Discount || 0));
+      const usedValue = Math.max(0, Number(usage.UsedValue || 0));
+      const usedSessions = Math.max(0, Number(usage.UsedSessions || 0));
+      let note = (customer.FullName || booking.CustomerID || usage.CustomerID || 'Khách hàng') + ' · ' + (service.ServiceName || booking.ServiceID || usage.ServiceID || 'Dịch vụ');
+
+      if (isSession) {
+        remainingSessions = Math.max(0, remainingSessions - (usedSessions || 1));
+        note += ' · trừ ' + (usedSessions || 1) + ' buổi';
+      } else {
+        remainingValue = Math.max(0, remainingValue - usedValue);
+        if (discount > 0) note += ' · ' + this.money(bookingPrice) + ' - ưu đãi ' + this.money(discount) + ' = ' + this.money(Math.max(0, bookingPrice - discount));
+        else note += ' · đã trừ ' + this.money(usedValue);
+      }
+
+      return {
+        Index: index + 1,
+        Date: this.date(booking.BookingDate || usage.CreatedDate),
+        Checkin: 'X',
+        Note: note,
+        UsedValue: usedValue,
+        UsedSessions: usedSessions || (isSession ? 1 : 0),
+        RemainingValue: isSession ? null : remainingValue,
+        RemainingSessions: isSession ? remainingSessions : null,
+        OutstandingAmount: Math.max(0, Number(booking.FinalPrice || 0) - usedValue)
+      };
+    }, this);
+
+    const initialCredit = isSession
+      ? Math.max(0, Number(card.TotalSessions || 0) || Number(card.PaidSessions || 0) + Number(card.BonusSessions || 0))
+      : Math.max(0, Number(card.FaceValue || 0) + Number(card.BonusValue || 0));
+    const discountText = Number(card.DiscountPercent || 0) > 0
+      ? (String(card.DiscountMode || 'Upfront') === 'PerSession'
+        ? 'Giảm ' + Number(card.DiscountPercent || 0) + '% cho mỗi buổi dịch vụ'
+        : 'Giảm ' + Number(card.DiscountPercent || 0) + '% khi mua thẻ')
+      : 'Không áp dụng chiết khấu';
+    const bonusText = Number(card.BonusSessions || 0) > 0
+      ? 'Tặng ' + Number(card.BonusSessions || 0) + ' buổi' + (card.BonusServiceName ? ' ' + card.BonusServiceName : '')
+      : 'Không có buổi tặng';
+
+    return {
+      CardID: card.CardID,
+      CardMode: isSession ? 'Session' : 'Value',
+      CustomerName: owner.FullName || card.CustomerID,
+      CustomerPhone: owner.Phone || '',
+      CustomerAddress: owner.Address || '',
+      PlanName: card.PlanName || 'Thẻ trả trước',
+      PurchasedDate: this.date(card.PurchasedDate),
+      DiscountText: discountText,
+      BonusText: bonusText,
+      InitialCredit: initialCredit,
+      RemainingValue: isSession ? null : Math.max(0, Number(card.RemainingValue || 0)),
+      RemainingSessions: isSession ? Math.max(0, Number(card.RemainingSessions || 0)) : null,
+      History: history
+    };
+  }
+
   static date(value) {
     if (!value) return '';
     return Utilities.formatDate(new Date(value), CONFIG.TIMEZONE, CONFIG.DATE_FORMAT);
@@ -168,4 +273,11 @@ function resendPrepaidReceiptEmail(token, bookingId) {
   const result = PrepaidReceiptService.sendForBooking(bookingId);
   if (!result.receipt) throw new Error('Booking này chưa dùng thẻ trả trước nên không có phiếu để gửi.');
   return Utils.toClient(result);
+}
+
+function getPrepaidCheckinSheet(token, bookingId) {
+  AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER, CONFIG.ROLES.RECEPTION]);
+  const sheet = PrepaidReceiptService.buildCheckinSheetForBooking(bookingId);
+  if (!sheet) throw new Error('Booking này chưa dùng thẻ trả trước nên chưa có phiếu check-in.');
+  return Utils.toClient(sheet);
 }
