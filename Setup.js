@@ -10,7 +10,7 @@ class SystemSetup {
       BOOKINGS: BookingService.HEADERS,
       BOOKING_ASSIGNMENTS: BookingService.ASSIGNMENT_HEADERS,
       EMPLOYEES: [
-        'EmployeeID', 'FullName', 'Phone', 'Role', 'Status', 'CreatedDate', 'UpdatedDate'
+        'EmployeeID', 'FullName', 'Phone', 'Role', 'CommissionRate', 'Status', 'CreatedDate', 'UpdatedDate'
       ],
       SERVICES: [
         'ServiceID', 'ServiceName', 'Duration', 'Price', 'Status', 'CreatedDate', 'UpdatedDate'
@@ -24,7 +24,8 @@ class SystemSetup {
       LOGS: AppLogger.HEADERS,
       USERS: AuthService.HEADERS,
       NOTICES: NoticeService.HEADERS,
-      LEAVE_SCHEDULES: LeaveService.HEADERS
+      LEAVE_SCHEDULES: LeaveService.HEADERS,
+      TECHNICIAN_EARNINGS: TechnicianEarningService.HEADERS
     };
   }
 
@@ -43,7 +44,7 @@ class SystemSetup {
       const spreadsheet = Database.getSpreadsheet();
       const exists = Boolean(spreadsheet.getSheetByName(sheetName));
 
-      if (configKey === 'BOOKINGS' || configKey === 'PREPAID_CARDS' || configKey === 'PREPAID_USAGE') {
+      if (configKey === 'BOOKINGS' || configKey === 'EMPLOYEES' || configKey === 'PREPAID_CARDS' || configKey === 'PREPAID_USAGE' || configKey === 'TECHNICIAN_EARNINGS') {
         Database.ensureColumns(sheetName, headers);
         results.push({ sheet: sheetName, action: exists ? 'upgraded' : 'created' });
         return;

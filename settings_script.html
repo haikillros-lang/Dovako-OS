@@ -2,7 +2,10 @@
   const settingsUi = { editingUserId: null, deletionCustomer: null, deletionSearchTimer: null };
 
   function loadSettings() {
-    apiCall('getEmployees', [], renderEmployees, handleSettingsError);
+    apiCall('getEmployees', [], function (items) {
+      renderEmployees(items);
+      renderEmployeeCommissionRates(items);
+    }, handleSettingsError);
     apiCall('getServices', [], renderServices, handleSettingsError);
     if (authUi.user && authUi.user.Role === 'Admin') {
       apiCall('getUsers', [], renderUsers, handleSettingsError);
@@ -69,6 +72,23 @@
     document.getElementById('employeeList').innerHTML = items.length ? items.map(function (item) {
       return '<div class="catalog-item"><div><strong>' + app.escape(item.FullName) + '</strong><small>' + app.escape(item.Role || '—') + ' · ' + app.escape(item.EmployeeID) + '</small></div><button class="icon-button danger" onclick="archiveEmployeeUi(\'' + app.escape(item.EmployeeID) + '\')">Lưu trữ</button></div>';
     }).join('') : '<div class="empty-state">Chưa có nhân viên.</div>';
+  }
+  function renderEmployeeCommissionRates(items) {
+    const list = document.getElementById('employeeCommissionList');
+    if (!list) return;
+    const activeEmployees = (items || []).filter(function (item) { return item.Status !== 'Inactive'; });
+    list.innerHTML = activeEmployees.length ? activeEmployees.map(function (item) {
+      const rate = Number(item.CommissionRate || 0);
+      return '<article class="commission-item"><div><strong>' + app.escape(item.FullName) + '</strong><small>' + app.escape(item.Role || 'Nhân viên') + ' · ' + app.escape(item.EmployeeID) + '</small></div><label><span>% tour</span><div class="commission-editor"><input id="employeeCommission-' + app.escape(item.EmployeeID) + '" type="number" min="0" max="100" step="0.1" value="' + rate + '"><b>%</b><button type="button" class="button secondary" onclick="saveEmployeeCommissionUi(\'' + app.escape(item.EmployeeID) + '\')">Cập nhật</button></div></label></article>';
+    }).join('') : '<div class="empty-state">Chưa có nhân viên đang hoạt động.</div>';
+  }
+  function saveEmployeeCommissionUi(employeeId) {
+    const input = document.getElementById('employeeCommission-' + employeeId);
+    if (!input) return;
+    apiCall('updateEmployeeCommission', [employeeId, input.value], function (employee) {
+      app.toast('Đã cập nhật % tour cho ' + employee.FullName + '.');
+      loadSettings();
+    }, handleSettingsError);
   }
   function renderServices(items) {
     document.getElementById('serviceList').innerHTML = items.length ? items.map(function (item) {

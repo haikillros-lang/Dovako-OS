@@ -1,7 +1,7 @@
 /** DOVAKO OS reference data: employees and services. */
 class CatalogService {
   static get EMPLOYEE_HEADERS() {
-    return ['EmployeeID', 'FullName', 'Phone', 'Role', 'Status', 'CreatedDate', 'UpdatedDate'];
+    return ['EmployeeID', 'FullName', 'Phone', 'Role', 'CommissionRate', 'Status', 'CreatedDate', 'UpdatedDate'];
   }
 
   static get SERVICE_HEADERS() {
@@ -10,6 +10,7 @@ class CatalogService {
 
   static initialize() {
     Database.ensureTable(CONFIG.SHEETS.EMPLOYEES, this.EMPLOYEE_HEADERS);
+    Database.ensureColumns(CONFIG.SHEETS.EMPLOYEES, this.EMPLOYEE_HEADERS);
     Database.ensureTable(CONFIG.SHEETS.SERVICES, this.SERVICE_HEADERS);
   }
 
@@ -37,6 +38,7 @@ class CatalogService {
       Role: Validator.text(value.Role, 'Vai trò', { maxLength: 80 }),
       Status: Validator.oneOf(value.Status || 'Active', ['Active', 'Inactive'], 'Trạng thái', { required: true }),
       CreatedDate: now,
+      CommissionRate: 0,
       UpdatedDate: now
     }, { idColumn: 'EmployeeID', padding: 4 });
     AppLogger.safe('AUDIT', 'Employee', 'CREATE', saved.EmployeeID, 'CREATE employee', { role: saved.Role });
@@ -56,6 +58,22 @@ class CatalogService {
       UpdatedDate: now
     }, { idColumn: 'ServiceID', padding: 4 });
     AppLogger.safe('AUDIT', 'Service', 'CREATE', saved.ServiceID, 'CREATE service', { price: saved.Price });
+    return saved;
+  }
+
+  /** Updates the percentage commission that applies when this employee completes a tour. */
+  static setEmployeeCommission(employeeId, commissionRate) {
+    this.initialize();
+    const id = Validator.required(employeeId, 'Mã nhân viên');
+    const current = Database.findById(CONFIG.SHEETS.EMPLOYEES, id, 'EmployeeID');
+    if (!current) throw new Error('Không tìm thấy nhân viên cần cập nhật.');
+
+    const rate = Validator.number(commissionRate, '% tour', { required: true, min: 0, max: 100 });
+    const saved = Database.update(CONFIG.SHEETS.EMPLOYEES, id, {
+      CommissionRate: rate,
+      UpdatedDate: new Date()
+    }, 'EmployeeID');
+    AppLogger.safe('AUDIT', 'Employee', 'UPDATE_COMMISSION_RATE', id, 'UPDATE employee commission rate', { commissionRate: rate });
     return saved;
   }
 
@@ -150,6 +168,10 @@ function createEmployee(token, data) { AuthService.requireSession(token, [CONFIG
 function createService(token, data) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.createService(data)); }
 function archiveEmployee(token, employeeId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.archiveEmployee(employeeId)); }
 function archiveService(token, serviceId) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]); return Utils.toClient(CatalogService.archiveService(serviceId)); }
+function updateEmployeeCommission(token, employeeId, commissionRate) {
+  AuthService.requireSession(token, [CONFIG.ROLES.ADMIN, CONFIG.ROLES.MANAGER]);
+  return Utils.toClient(CatalogService.setEmployeeCommission(employeeId, commissionRate));
+}
 function repairDuplicateCatalogIds(token) { AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]); return Utils.toClient(CatalogService.repairDuplicateIds()); }
 function purgeUnlinkedEmployees(token, confirmation) {
   AuthService.requireSession(token, [CONFIG.ROLES.ADMIN]);

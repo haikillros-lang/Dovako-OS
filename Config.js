@@ -78,7 +78,9 @@ const CONFIG = Object.freeze({
 
     NOTICES: "NOTICES",
 
-    LEAVE_SCHEDULES: "LEAVE_SCHEDULES"
+    LEAVE_SCHEDULES: "LEAVE_SCHEDULES",
+
+    TECHNICIAN_EARNINGS: "TECHNICIAN_EARNINGS"
 
   },
 
@@ -224,7 +226,9 @@ const CONFIG = Object.freeze({
 
     ,PREPAID_USAGE: "PU"
 
-    ,PREPAID_PLAN: "PM"
+    ,PREPAID_PLAN: "PM",
+
+    TECHNICIAN_EARNING: "TN"
 
   },
 

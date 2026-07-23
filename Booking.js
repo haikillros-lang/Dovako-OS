@@ -244,6 +244,9 @@ class BookingService {
     if (current.Status === CONFIG.BOOKING_STATUS.COMPLETED) return current;
     this.assertStatusTransition(current.Status, CONFIG.BOOKING_STATUS.COMPLETED);
 
+    // Keep the final tour amount before prepaid settlement changes the
+    // booking receivable to zero. Commission is earned from this net amount.
+    const commissionBase = Math.max(0, Number(current.FinalPrice || 0));
     const prepaid = typeof PrepaidService !== 'undefined'
       ? PrepaidService.consumeForBooking(current)
       : { used: false };
@@ -257,6 +260,9 @@ class BookingService {
     if (prepaid.used) changes.FinalPrice = Math.max(0, Number(prepaid.outstandingAmount || 0));
 
     const saved = Database.update(this.TABLE, bookingId, changes, 'BookingID');
+    const technicianEarnings = typeof TechnicianEarningService !== 'undefined'
+      ? TechnicianEarningService.ensureForCompletedBooking(current, commissionBase)
+      : [];
     // Receipt delivery is best-effort: an email error must never undo a
     // completed booking or restore a card balance that was already consumed.
     const receiptResult = prepaid.used && typeof PrepaidReceiptService !== 'undefined'
@@ -265,10 +271,11 @@ class BookingService {
     this.audit('STATUS_' + this.statusKey(CONFIG.BOOKING_STATUS.COMPLETED), bookingId, Object.assign(
       this.auditMetadata(saved), {
         prepaidCardId: prepaid.cardId || '', prepaidUsed: Boolean(prepaid.used),
+        technicianEarningCount: technicianEarnings.length,
         prepaidReceiptEmailSent: Boolean(receiptResult.email && receiptResult.email.sent)
       }
     ));
-    return Object.assign({}, saved, { Prepaid: prepaid, PrepaidReceipt: receiptResult.receipt, PrepaidReceiptEmail: receiptResult.email });
+    return Object.assign({}, saved, { Prepaid: prepaid, TechnicianEarnings: technicianEarnings, PrepaidReceipt: receiptResult.receipt, PrepaidReceiptEmail: receiptResult.email });
   }
 
   static cancel(bookingId, note) {

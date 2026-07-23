@@ -272,7 +272,10 @@
   function loadBookings() {
     const date = document.getElementById('bookingFilterDate').value;
     document.getElementById('bookingList').innerHTML = '<div class="empty-state">Đang tải...</div>';
-    apiCall('getBookings', [{ date: date, includeCancelled: true }], renderBookings, handleBookingError);
+    apiCall('getBookings', [{ date: date, includeCancelled: true }], function (bookings) {
+      renderBookings(bookings);
+      loadTechnicianEarnings();
+    }, handleBookingError);
   }
 
   function loadBookingPrepaid() {
@@ -533,6 +536,46 @@
       list.innerHTML = '<p class="file-empty">Không tải được danh sách phiếu.</p>';
       handleBookingError(error);
     });
+  }
+
+  function loadTechnicianEarnings() {
+    const summary = document.getElementById('technicianEarningsSummary');
+    const list = document.getElementById('technicianEarningsList');
+    if (!summary || !list || !authUi.user || authUi.user.Role !== 'Technician') return;
+    const date = document.getElementById('bookingFilterDate').value || dateUi.today();
+    summary.innerHTML = '<div class="empty-state">Đang tải số liệu...</div>';
+    list.innerHTML = '<div class="empty-state">Đang tải tour hoàn thành...</div>';
+    apiCall('getTechnicianEarnings', [{ from: date, to: date }], renderTechnicianEarnings, function (error) {
+      summary.innerHTML = '<div class="empty-state">Không tải được số liệu.</div>';
+      list.innerHTML = '<div class="empty-state">Không tải được tour hoàn thành.</div>';
+      handleBookingError(error);
+    });
+  }
+
+  function renderTechnicianEarnings(data) {
+    const summary = document.getElementById('technicianEarningsSummary');
+    const list = document.getElementById('technicianEarningsList');
+    if (!summary || !list) return;
+    const result = data || { records: [], summary: {} };
+    const totals = result.summary || {};
+    const records = result.records || [];
+    const date = document.getElementById('bookingFilterDate').value || dateUi.today();
+    document.getElementById('technicianEarningsCaption').textContent = 'Ngày ' + dateUi.display(date) + ' · Hoa hồng tự tính khi tour hoàn thành. Bạn chỉ nhập tiền tip của mình.';
+    summary.innerHTML = '<article><span>Tour hoàn thành</span><strong>' + Number(totals.tours || 0) + '</strong></article>' +
+      '<article><span>Hoa hồng tour</span><strong>' + app.currency(totals.commission || 0) + '</strong></article>' +
+      '<article><span>Tiền tip</span><strong>' + app.currency(totals.tip || 0) + '</strong></article>';
+    list.innerHTML = records.length ? records.map(function (record) {
+      return '<article class="earning-item"><div><strong>' + app.escape(record.CustomerName || record.CustomerID) + ' · ' + app.escape(record.ServiceName || record.ServiceID) + '</strong><small>' + app.escape(dateUi.display(record.BookingDate)) + ' · ' + app.escape(record.BookingID) + '</small><p class="earning-commission">% tour: ' + Number(record.CommissionRate || 0) + '% · Hoa hồng: ' + app.currency(record.CommissionAmount || 0) + '</p></div><div class="earning-tip"><label><span>Tiền tip</span><input id="tip-' + app.escape(record.EarningID) + '" type="number" min="0" inputmode="numeric" value="' + Number(record.TipAmount || 0) + '"></label><button type="button" class="button secondary" onclick="saveTechnicianTipUi(\'' + app.escape(record.EarningID) + '\')">Lưu tip</button></div></article>';
+    }).join('') : '<div class="empty-state">Chưa có tour hoàn thành trong ngày này.</div>';
+  }
+
+  function saveTechnicianTipUi(earningId) {
+    const input = document.getElementById('tip-' + earningId);
+    if (!input) return;
+    apiCall('updateTechnicianTip', [earningId, input.value], function () {
+      app.toast('Đã lưu tiền tip.');
+      loadTechnicianEarnings();
+    }, handleBookingError);
   }
 
   function readTechnicianAssessmentFile(file) {

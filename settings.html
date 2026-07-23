@@ -3,6 +3,9 @@
     <form id="employeeForm" class="inline-form"><input name="FullName" required placeholder="Tên nhân viên"><input name="Phone" inputmode="tel" placeholder="Số điện thoại"><input name="Role" placeholder="Vai trò / KTV"><button class="button primary">Thêm</button></form>
     <div id="employeeList" class="catalog-list"></div>
   </section>
+  <section class="panel commission-panel" data-roles="Admin,Manager"><div class="panel-head compact"><div><h2>% tour kỹ thuật viên</h2><p>Quản lý và Admin tự cập nhật mức % cho từng người. Hệ thống tự tính khi booking hoàn thành.</p></div></div>
+    <div id="employeeCommissionList" class="commission-list"></div>
+  </section>
   <section class="panel"><div class="panel-head compact"><div><h2>Dịch vụ</h2><p>Giá và thời lượng tự điền vào Booking.</p></div></div>
     <form id="serviceForm" class="inline-form services"><input name="ServiceName" required placeholder="Tên dịch vụ"><input name="Duration" type="number" min="1" required placeholder="Phút"><input name="Price" type="number" min="0" required placeholder="Giá"><button class="button primary">Thêm</button></form>
     <div id="serviceList" class="catalog-list"></div>
