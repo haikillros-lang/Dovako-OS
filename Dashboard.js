@@ -109,19 +109,25 @@ class DashboardService {
       return map;
     }, {});
     return bookings.slice().sort(BookingService.sortByDateTime).map(function (booking) {
+      const employeeNames = Array.isArray(booking.EmployeeNames)
+        ? booking.EmployeeNames.filter(function (name) { return String(name || '').trim() !== ''; })
+        : [];
       return {
         BookingID: booking.BookingID,
         CustomerID: booking.CustomerID,
+        // Tổng quan chỉ cần nhận diện khách và người phục vụ. Không đưa số
+        // điện thoại vào dữ liệu trả về để Kỹ thuật viên không thể xem được.
         CustomerName: names[booking.CustomerID] || 'Khách đã xóa',
         EmployeeID: booking.EmployeeID,
+        EmployeeIDs: Array.isArray(booking.EmployeeIDs) ? booking.EmployeeIDs.slice() : (booking.EmployeeID ? [booking.EmployeeID] : []),
+        EmployeeNames: employeeNames,
+        EmployeeName: employeeNames.join(', ') || 'Chưa phân công',
         ServiceID: booking.ServiceID,
         BedID: booking.BedID,
         BookingDate: booking.BookingDate,
         StartTime: booking.StartTime,
         EndTime: booking.EndTime,
-        Status: booking.Status,
-        FinalPrice: booking.FinalPrice,
-        Note: booking.Note
+        Status: booking.Status
       };
     });
   }

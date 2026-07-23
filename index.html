@@ -312,7 +312,9 @@
           }).join('; ') : '';
           const schedule = data.todaySchedule || [];
           document.getElementById('todaySchedule').innerHTML = schedule.length ? schedule.map(function (item) {
-            return '<article class="schedule-item"><time>' + app.escape(item.StartTime) + '</time><div><strong>' + app.escape(item.CustomerName) + '</strong><p>' + app.escape(item.ServiceID) + ' · Giường ' + app.escape(item.BedID) + '</p></div><span class="status-chip">' + app.escape(item.Status) + '</span></article>';
+            const technicians = Array.isArray(item.EmployeeNames) && item.EmployeeNames.length
+              ? item.EmployeeNames.join(', ') : (item.EmployeeName || 'Chưa phân công');
+            return '<article class="schedule-item"><time>' + app.escape(item.StartTime) + '</time><div><strong>' + app.escape(item.CustomerName) + '</strong><p>' + app.escape(item.ServiceID) + ' · KTV: ' + app.escape(technicians) + ' · Giường ' + app.escape(item.BedID) + '</p></div><span class="status-chip">' + app.escape(item.Status) + '</span></article>';
           }).join('') : '<div class="empty-state">Chưa có booking nào hôm nay.</div>';
         },
         handleError(error) {
