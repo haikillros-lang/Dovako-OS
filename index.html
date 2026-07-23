@@ -135,7 +135,10 @@
           picker.innerHTML =
             '<div class="dovako-date-picker-head">' +
               '<button type="button" class="icon-button" data-date-action="previous" aria-label="Tháng trước">‹</button>' +
-              '<strong id="dovakoDatePickerTitle"></strong>' +
+              '<span class="dovako-date-picker-period">' +
+                '<select id="dovakoDatePickerMonth" aria-label="Chọn tháng"></select>' +
+                '<select id="dovakoDatePickerYear" aria-label="Chọn năm"></select>' +
+              '</span>' +
               '<span><button type="button" class="icon-button" data-date-action="today">Hôm nay</button><button type="button" class="icon-button" data-date-action="next" aria-label="Tháng sau">›</button></span>' +
             '</div>' +
             '<table class="dovako-date-picker-calendar"><thead><tr><th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th>CN</th></tr></thead><tbody id="dovakoDatePickerDays"></tbody></table>' +
@@ -150,6 +153,17 @@
             if (action === 'close') dateUi.close();
             const date = event.target && event.target.dataset ? event.target.dataset.date : '';
             if (date) dateUi.select(date);
+          });
+          picker.addEventListener('change', function (event) {
+            const target = event.target;
+            if (!target || (target.id !== 'dovakoDatePickerMonth' && target.id !== 'dovakoDatePickerYear')) return;
+            const monthSelect = document.getElementById('dovakoDatePickerMonth');
+            const yearSelect = document.getElementById('dovakoDatePickerYear');
+            const year = Number(yearSelect && yearSelect.value);
+            const month = Number(monthSelect && monthSelect.value);
+            if (Number.isInteger(year) && Number.isInteger(month) && month >= 0 && month <= 11) {
+              dateUi.setPeriod(year, month);
+            }
           });
           document.addEventListener('mousedown', function (event) {
             const target = event.target;
@@ -179,13 +193,36 @@
           this.pickerMonth = new Date(current.getFullYear(), current.getMonth() + Number(months || 0), 1);
           this.renderPicker();
         },
+        setPeriod(year, monthIndex) {
+          this.pickerMonth = new Date(Number(year), Number(monthIndex), 1);
+          this.renderPicker();
+        },
+        availableYears(selectedYear) {
+          const currentYear = new Date().getFullYear();
+          const firstYear = Math.min(1920, Number(selectedYear) || currentYear);
+          const lastYear = Math.max(currentYear + 10, Number(selectedYear) || currentYear);
+          const years = [];
+          for (let year = lastYear; year >= firstYear; year -= 1) years.push(year);
+          return years;
+        },
         renderPicker() {
           const month = this.pickerMonth || new Date();
           const year = month.getFullYear();
           const monthIndex = month.getMonth();
           const selected = this.iso(this.pickerTarget && this.pickerTarget.value);
           const today = this.todayIso();
-          document.getElementById('dovakoDatePickerTitle').textContent = new Intl.DateTimeFormat('vi-VN', { month: 'long', year: 'numeric' }).format(month);
+          const monthSelect = document.getElementById('dovakoDatePickerMonth');
+          const yearSelect = document.getElementById('dovakoDatePickerYear');
+          if (monthSelect && yearSelect) {
+            monthSelect.innerHTML = Array.from({ length: 12 }, function (_, index) {
+              return '<option value="' + index + '">Tháng ' + (index + 1) + '</option>';
+            }).join('');
+            yearSelect.innerHTML = this.availableYears(year).map(function (item) {
+              return '<option value="' + item + '">' + item + '</option>';
+            }).join('');
+            monthSelect.value = String(monthIndex);
+            yearSelect.value = String(year);
+          }
           const cells = [];
           const firstDay = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
           const days = new Date(year, monthIndex + 1, 0).getDate();
