@@ -73,15 +73,25 @@ class PrepaidReceiptService {
     }
 
     try {
+      const checkinSheet = this.buildCheckinSheetForBooking(bookingId);
+      const emailHtml = receipt.Html + (checkinSheet ? this.checkinEmailHtml(checkinSheet) : '');
+      const emailText = receipt.Text + (checkinSheet ? '\n\n' + this.checkinText(checkinSheet) : '');
+
       MailApp.sendEmail({
         to: receipt.CustomerEmail,
-        subject: receipt.Subject,
-        body: receipt.Text,
-        htmlBody: receipt.Html,
+        subject: receipt.Subject + ' & bang check-in',
+        body: emailText,
+        htmlBody: emailHtml,
         name: 'DOVAKO Stretching'
       });
-      this.audit('EMAIL_SENT', receipt, { recipient: receipt.CustomerEmail });
-      return { receipt: receipt, email: { sent: true, recipient: receipt.CustomerEmail } };
+      this.audit('EMAIL_SENT', receipt, {
+        recipient: receipt.CustomerEmail,
+        includesCheckinSheet: Boolean(checkinSheet)
+      });
+      return {
+        receipt: receipt,
+        email: { sent: true, recipient: receipt.CustomerEmail, includesCheckinSheet: Boolean(checkinSheet) }
+      };
     } catch (error) {
       const message = error && error.message ? error.message : String(error || 'Không gửi được email.');
       this.audit('EMAIL_FAILED', receipt, { message: message });
@@ -242,6 +252,79 @@ class PrepaidReceiptService {
       '<h3 style="margin:0 0 16px">PHIẾU TRỪ THẺ TRẢ TRƯỚC</h3>' +
       '<div style="white-space:pre-line;border:1px solid #d7dce6;border-radius:10px;padding:16px;background:#f9fbff">' +
       rows.join('<br>') + '</div></div>';
+  }
+
+  /** A compact check-in ledger displayed directly below the prepaid receipt email. */
+  static checkinText(sheet) {
+    const unit = sheet.CardMode === 'Session' ? 'buổi' : 'đ';
+    const initial = sheet.CardMode === 'Session'
+      ? String(sheet.InitialCredit || 0) + ' buổi'
+      : this.money(sheet.InitialCredit || 0);
+    const remaining = sheet.CardMode === 'Session'
+      ? String(sheet.RemainingSessions || 0) + ' buổi'
+      : this.money(sheet.RemainingValue || 0);
+    const lines = [
+      'BẢNG CHECK-IN THẺ TRẢ TRƯỚC',
+      'Mã thẻ: ' + sheet.CardID,
+      'Khách hàng: ' + sheet.CustomerName,
+      'Hạn mức ban đầu: ' + initial,
+      'Số dư hiện tại: ' + remaining,
+      '--------------------------------'
+    ];
+    (sheet.History || []).forEach(function (item) {
+      const used = sheet.CardMode === 'Session'
+        ? String(item.UsedSessions || 0) + ' buổi'
+        : PrepaidReceiptService.money(item.UsedValue || 0);
+      const left = sheet.CardMode === 'Session'
+        ? String(item.RemainingSessions || 0) + ' buổi'
+        : PrepaidReceiptService.money(item.RemainingValue || 0);
+      lines.push(item.Index + '. ' + item.Date + ' | Đã trừ: ' + used + ' | Còn lại: ' + left);
+    });
+    return lines.join('\n');
+  }
+
+  /**
+   * Uses only email-safe HTML/CSS so the customer can see the full check-in
+   * ledger directly in Gmail without opening the DOVAKO web app.
+   */
+  static checkinEmailHtml(sheet) {
+    const isSession = sheet.CardMode === 'Session';
+    const initial = isSession
+      ? this.escape(String(sheet.InitialCredit || 0) + ' buổi')
+      : this.escape(this.money(sheet.InitialCredit || 0));
+    const remaining = isSession
+      ? this.escape(String(sheet.RemainingSessions || 0) + ' buổi')
+      : this.escape(this.money(sheet.RemainingValue || 0));
+    const rows = (sheet.History || []).map(function (item) {
+      const used = isSession
+        ? String(item.UsedSessions || 0) + ' buổi'
+        : PrepaidReceiptService.money(item.UsedValue || 0);
+      const left = isSession
+        ? String(item.RemainingSessions || 0) + ' buổi'
+        : PrepaidReceiptService.money(item.RemainingValue || 0);
+      return '<tr>' +
+        '<td style="padding:8px;border:1px solid #d7dce6;text-align:center">' + PrepaidReceiptService.escape(item.Index) + '</td>' +
+        '<td style="padding:8px;border:1px solid #d7dce6">' + PrepaidReceiptService.escape(item.Date) + '</td>' +
+        '<td style="padding:8px;border:1px solid #d7dce6;text-align:center">' + PrepaidReceiptService.escape(item.Checkin || 'X') + '</td>' +
+        '<td style="padding:8px;border:1px solid #d7dce6">' + PrepaidReceiptService.escape(item.Note) + '</td>' +
+        '<td style="padding:8px;border:1px solid #d7dce6;text-align:right;white-space:nowrap">' + PrepaidReceiptService.escape(used) + '</td>' +
+        '<td style="padding:8px;border:1px solid #d7dce6;text-align:right;white-space:nowrap">' + PrepaidReceiptService.escape(left) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    return '<div style="font-family:Arial,sans-serif;color:#152238;line-height:1.5;max-width:760px;margin-top:24px">' +
+      '<h3 style="margin:0 0 8px">BẢNG CHECK-IN THẺ TRẢ TRƯỚC</h3>' +
+      '<p style="margin:0 0 12px">Mã thẻ: <strong>' + this.escape(sheet.CardID) + '</strong> · Khách hàng: <strong>' + this.escape(sheet.CustomerName) + '</strong></p>' +
+      '<p style="margin:0 0 12px">Ưu đãi: ' + this.escape(sheet.DiscountText || 'Không áp dụng') + '<br>' +
+      'Tặng kèm: ' + this.escape(sheet.BonusText || 'Không có') + '<br>' +
+      'Hạn mức ban đầu: <strong>' + initial + '</strong> · Số dư hiện tại: <strong>' + remaining + '</strong></p>' +
+      '<table style="border-collapse:collapse;width:100%;font-size:13px">' +
+      '<thead><tr style="background:#edf2f9">' +
+      '<th style="padding:8px;border:1px solid #d7dce6">STT</th><th style="padding:8px;border:1px solid #d7dce6">Ngày</th>' +
+      '<th style="padding:8px;border:1px solid #d7dce6">Check-in</th><th style="padding:8px;border:1px solid #d7dce6">Ghi chú</th>' +
+      '<th style="padding:8px;border:1px solid #d7dce6">Đã trừ</th><th style="padding:8px;border:1px solid #d7dce6">Còn lại</th>' +
+      '</tr></thead><tbody>' + (rows || '<tr><td colspan="6" style="padding:10px;border:1px solid #d7dce6;text-align:center">Chưa có lịch sử sử dụng.</td></tr>') +
+      '</tbody></table></div>';
   }
 
   static escape(value) {
